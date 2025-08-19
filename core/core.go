@@ -7,14 +7,17 @@ import (
 
 	"github.com/chenbaoding2818/chainly/config"
 	"github.com/chenbaoding2818/chainly/lifecycle"
-	// "github.com/chenbaoding2818/chainly/lifecycle/log"
+	"github.com/chenbaoding2818/chainly/log"
+	"github.com/chenbaoding2818/chainly/timer/cron"
 )
 
 type Server struct {
 	cfg *config.Config
 }
 
-type Option func(*config.Config)
+func NewDefaultServer(opts ...Option) *Server {
+	return NewServer(config.NewDefaultConfig(), opts...)
+}
 
 func NewServer(cfg *config.Config, opts ...Option) *Server {
 	for _, opt := range opts {
@@ -25,10 +28,9 @@ func NewServer(cfg *config.Config, opts ...Option) *Server {
 	}
 }
 
-func NewDefaultServer(opts ...Option) *Server {
-	return NewServer(config.NewDefaultConfig(), opts...)
-}
+type Option func(*config.Config)
 
+// WithNetConfig 网络配置定义
 func WithNetConfig(netCfg *config.Net) Option {
 	return func(c *config.Config) {
 		c.NetCfg = netCfg
@@ -46,7 +48,10 @@ func WithCustomConfig(m map[string]interface{}) Option {
 
 // RegisterDefaultComponents 注册默认服务组件
 func (s *Server) RegisterDefaultComponents() {
-	lifecycle.LifecycleMgr.AddLifecycle(nil)
+	// 注册日志组件
+	lifecycle.LifecycleMgr.AddLifecycle(log.NewLogComponent())
+	// 注册定时组件
+	lifecycle.LifecycleMgr.AddLifecycle(cron.NewCronComponent())
 }
 
 // RegisterComponent 注册服务组件

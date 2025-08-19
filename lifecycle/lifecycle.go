@@ -21,7 +21,7 @@ var (
 type Lifecycle interface {
 	Start(*config.Config)
 
-	Priority() uint32
+	Priority() int32
 
 	Stop()
 }
