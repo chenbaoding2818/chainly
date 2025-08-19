@@ -10,7 +10,7 @@ func main() {
 	// Register default components
 	server.RegisterDefaultComponents()
 	// Register custom components (注册自定义的组件)
-	server.RegisterComponents()
+	server.RegisterComponent(nil)
 	// Run the server
 	server.Run()
 }

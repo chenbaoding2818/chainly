@@ -3,6 +3,8 @@ package lifecycle
 import (
 	"sort"
 	"sync"
+
+	"github.com/chenbaoding2818/chainly/config"
 )
 
 const (
@@ -17,7 +19,7 @@ var (
 )
 
 type Lifecycle interface {
-	Start()
+	Start(*config.Config)
 
 	Priority() uint32
 
@@ -27,6 +29,7 @@ type Lifecycle interface {
 // LifecycleManager 组件生命周期管理器
 type LifecycleManager struct {
 	lifecycles []Lifecycle
+	cfg        *config.Config
 }
 
 // Start 启动顺序，从高优先级到低优先级
@@ -39,7 +42,7 @@ func (lm *LifecycleManager) Start() {
 		return lm.lifecycles[i].Priority() > lm.lifecycles[j].Priority()
 	})
 	for _, lifecycle := range lm.lifecycles {
-		lifecycle.Start()
+		lifecycle.Start(lm.cfg)
 	}
 }
 
@@ -57,11 +60,12 @@ func (lm *LifecycleManager) AddLifecycle(lifecycle Lifecycle) {
 	lm.lifecycles = append(lm.lifecycles, lifecycle)
 }
 
-func NewLifecycleManager() *LifecycleManager {
+func NewLifecycleManager(cfg *config.Config) *LifecycleManager {
 	LifecycleOnce.Do(func() {
 		if LifecycleMgr == nil {
 			LifecycleMgr = &LifecycleManager{
 				lifecycles: make([]Lifecycle, 0),
+				cfg:        cfg,
 			}
 		}
 	})
