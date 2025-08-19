@@ -8,6 +8,7 @@ import (
 	"github.com/chenbaoding2818/chainly/config"
 	"github.com/chenbaoding2818/chainly/lifecycle"
 	"github.com/chenbaoding2818/chainly/log"
+	"github.com/chenbaoding2818/chainly/sensitive"
 	"github.com/chenbaoding2818/chainly/timer/cron"
 )
 
@@ -50,6 +51,8 @@ func WithCustomConfig(m map[string]interface{}) Option {
 func (s *Server) RegisterDefaultComponents() {
 	// 注册日志组件
 	lifecycle.LifecycleMgr.AddLifecycle(log.NewLogComponent())
+	// 注册敏感词库组件
+	lifecycle.LifecycleMgr.AddLifecycle(sensitive.NewSensitiveComponent())
 	// 注册定时组件
 	lifecycle.LifecycleMgr.AddLifecycle(cron.NewCronComponent())
 }
