@@ -152,3 +152,21 @@ func NewSensitiveTrie(filePath string) {
 		st.addWords(contents)
 	})
 }
+
+var (
+	sensitiveComponent     *SensitiveManager
+	sensitiveComponentOnce sync.Once
+)
+
+type SensitiveManager struct {
+}
+
+func NewSensitiveComponent() *SensitiveManager {
+	sensitiveComponentOnce.Do(func() {
+		if sensitiveComponent == nil {
+			sensitiveComponent = &SensitiveManager{}
+		}
+	})
+
+	return sensitiveComponent
+}

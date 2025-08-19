@@ -1,6 +1,9 @@
 package config
 
-import "strings"
+import (
+	"net/http"
+	"strings"
+)
 
 // 服务基础配置文件解析器类型
 type ConfigParser uint8
@@ -14,15 +17,24 @@ const (
 type Basic struct {
 }
 
-func NewBasicCfg() *Basic {
+func NewDefaultBasicCfg() *Basic {
 	return &Basic{}
 }
 
 type Net struct {
+	// 最大连接数
+	MaxConn int
+	// websocket连接认证hooker
+	// 可以通过创建服务时传入options参数设置
+	WebsocketAuthHooker func(req *http.Request) error
 }
 
-func NewNetCfg() *Net {
-	return &Net{}
+// NewNetCfg 创建一个默认的Net配置
+func NewDefaultNetCfg() *Net {
+	return &Net{
+		// 默认最大连接数
+		MaxConn: 5000,
+	}
 }
 
 // Config 定义服务基础配置文件结构
@@ -80,8 +92,8 @@ func NewConfig(path string, parser ConfigParser) *Config {
 func NewDefaultConfig() *Config {
 	// 设置默认的值
 	return &Config{
-		BasicCfg:        NewBasicCfg(),
-		NetCfg:          NewNetCfg(),
+		BasicCfg:        NewDefaultBasicCfg(),
+		NetCfg:          NewDefaultNetCfg(),
 		CustomCfgFields: make(map[string]interface{}),
 	}
 }
