@@ -1,7 +1,6 @@
 package config
 
 import (
-	"net/http"
 	"strings"
 )
 
@@ -21,34 +20,20 @@ func NewDefaultBasicCfg() *Basic {
 	return &Basic{}
 }
 
-type Net struct {
-	// 最大连接数
-	MaxConn int
-	// websocket连接认证hooker
-	// 可以通过创建服务时传入options参数设置
-	WebsocketAuthHooker func(req *http.Request) error
-}
-
-// NewNetCfg 创建一个默认的Net配置
-func NewDefaultNetCfg() *Net {
-	return &Net{
-		// 默认最大连接数
-		MaxConn: 5000,
-	}
-}
-
 // Config 定义服务基础配置文件结构
 type Config struct {
 	// 配置路径，默认是当前目录下的config.ini
 	Path string
 	// 配置解析器，默认是ini，支持json、yaml
 	Parser ConfigParser
-	// // 高并发自动扩容 放到默认配置中
-	// concurrencyAutoEnabe bool
 	// 关于服务相关的配置
 	BasicCfg *Basic
 	// 关于net组件相关的配置
 	NetCfg *Net
+	// 关于存储的配置
+	StorageCfg *Storage
+	// 关于日志的配置
+	LogCfg *Log
 	// 自定义配置项 用户可根据自己的项目自定义自己的配置项
 	CustomCfgFields map[string]interface{}
 }
