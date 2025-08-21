@@ -14,23 +14,35 @@ type Net struct {
 	TimeoutEmabled bool
 	// 最大连接数
 	MaxConn int
+	// 处理消息的handler
+	MessageHandler IMesssageHandler
+	Ws             *Websocket
+	Kcp            *Kcp
+	Http           *Http
+}
 
-	Ws   *Websocket
-	Kcp  *Kcp
-	Http *Http
+// IMesssageHandler 处理消息的接口
+// 用户只要实现这个接口，就可以自定义自己的消息处理逻辑
+type IMesssageHandler interface {
+	Handle(msg []byte) error
 }
 
 type Websocket struct {
+	WsPath string
 	WsPort int
 	// websocket连接升级器
 	Upgrader *websocket.Upgrader
 	// websocket连接认证hooker
 	// 可以通过创建服务时传入options参数设置
 	WsAuthHooker func(req *http.Request) error
+	// response header hooker
+	// 可以通过创建服务时传入options参数设置
+	WsRespHeader map[string][]string
 }
 
 func NewDefaultWebsocketCfg() *Websocket {
 	return &Websocket{
+		WsPath: "/ws",
 		WsPort: 8000,
 		Upgrader: &websocket.Upgrader{
 			ReadBufferSize:  4096,
@@ -39,6 +51,8 @@ func NewDefaultWebsocketCfg() *Websocket {
 				return true
 			},
 		},
+		WsAuthHooker: nil,
+		WsRespHeader: nil,
 	}
 }
 
