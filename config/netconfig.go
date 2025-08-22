@@ -27,6 +27,10 @@ type IMesssageHandler interface {
 	Handle(msg []byte) error
 }
 
+type IWsAuthResp interface {
+	GetAccount()
+}
+
 type Websocket struct {
 	WsPath string
 	WsPort int
@@ -34,7 +38,7 @@ type Websocket struct {
 	Upgrader *websocket.Upgrader
 	// websocket连接认证hooker
 	// 可以通过创建服务时传入options参数设置
-	WsAuthHooker func(req *http.Request) error
+	WsAuthHooker func(req *http.Request) (IWsAuthResp, error)
 	// response header hooker
 	// 可以通过创建服务时传入options参数设置
 	WsRespHeader map[string][]string
