@@ -5,7 +5,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/chenbaoding2818/chainly/config"
+	iface "github.com/chenbaoding2818/chainly/interface"
 	"github.com/gorilla/websocket"
 )
 
@@ -19,7 +19,7 @@ type Actor struct {
 	// 连接
 	conn *websocket.Conn
 	// handler 处理消息的函数
-	handler config.IMesssageHandler
+	handler iface.IMessageHandler
 	// 消息队列(信箱)
 	mailbox chan []byte
 	// 退出信号
@@ -27,6 +27,7 @@ type Actor struct {
 	// 离线定时器 离线定时器（用于在离线一段时间后销毁自己）
 	// offlineTimer
 	//
+	isOnline bool
 }
 
 func (a *Actor) Start() {
@@ -67,6 +68,10 @@ func (a *Actor) Start() {
 	}
 }
 
+func (a *Actor) SendMessage(msg []byte) {
+	a.mailbox <- msg
+}
+
 // processMessage 处理信箱中的消息
 func (a *Actor) processMessage(msg []byte) error {
 	return a.handler.Handle(msg)
@@ -82,4 +87,8 @@ func (a *Actor) Stop() {
 
 func (a *Actor) GetConn() *websocket.Conn {
 	return a.conn
+}
+
+func (a *Actor) IsOnline() bool {
+	return a.isOnline
 }

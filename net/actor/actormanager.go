@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/chenbaoding2818/chainly/config"
+	iface "github.com/chenbaoding2818/chainly/interface"
 )
 
 var (
@@ -14,7 +15,7 @@ var (
 type ActorManager struct {
 	// key: actor id[player id or other id], value: actor
 	actors  sync.Map
-	handler config.IMesssageHandler
+	handler iface.IMessageHandler
 	// TODO: 使用分段锁实现 提高并发能力
 	lock sync.Mutex
 }
@@ -27,6 +28,7 @@ func (am *ActorManager) GetActor(actorId string) *Actor {
 	am.lock.Lock()
 	defer am.lock.Unlock()
 	if actor, ok := am.actors.Load(actorId); ok {
+		// 判断连接是否存在
 		return actor.(*Actor)
 	}
 	// 不存在 则创建新actor

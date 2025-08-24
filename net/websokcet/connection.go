@@ -6,26 +6,28 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chenbaoding2818/chainly/net/actor"
 	"github.com/gorilla/websocket"
 )
 
 // 连接管理
 type WsConnection struct {
-	// 连接ID
-	ID string
+	// // 连接ID
+	// ID string
 	// 连接对象
 	Conn *websocket.Conn
-
+	// actor对象
+	Actor  *actor.Actor
 	ctx    context.Context
 	cancel context.CancelFunc
 	// 写锁 用于写消息
 	Lock *sync.Mutex
 }
 
-func NewWsConnection(id string, conn *websocket.Conn) *WsConnection {
+func NewWsConnection(conn *websocket.Conn) *WsConnection {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &WsConnection{
-		ID:     id,
+		// ID:     id,
 		Conn:   conn,
 		ctx:    ctx,
 		cancel: cancel,
@@ -53,6 +55,7 @@ func (c *WsConnection) Listen() {
 				} else { // 解析信息
 					fmt.Printf("receive message: %s\n", string(msg))
 					// 将消息发送给消息处理器
+					c.Actor.SendMessage(msg)
 				}
 			}
 		}

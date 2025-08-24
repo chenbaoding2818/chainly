@@ -3,6 +3,7 @@ package config
 import (
 	"net/http"
 
+	iface "github.com/chenbaoding2818/chainly/interface"
 	"github.com/gorilla/websocket"
 )
 
@@ -15,20 +16,10 @@ type Net struct {
 	// 最大连接数
 	MaxConn int
 	// 处理消息的handler
-	MessageHandler IMesssageHandler
+	MessageHandler iface.IMessageHandler
 	Ws             *Websocket
 	Kcp            *Kcp
 	Http           *Http
-}
-
-// IMesssageHandler 处理消息的接口
-// 用户只要实现这个接口，就可以自定义自己的消息处理逻辑
-type IMesssageHandler interface {
-	Handle(msg []byte) error
-}
-
-type IWsAuthResp interface {
-	GetAccount()
 }
 
 type Websocket struct {
@@ -38,7 +29,7 @@ type Websocket struct {
 	Upgrader *websocket.Upgrader
 	// websocket连接认证hooker
 	// 可以通过创建服务时传入options参数设置
-	WsAuthHooker func(req *http.Request) (IWsAuthResp, error)
+	WsAuthHooker func(req *http.Request) (iface.IWsAuthResp, error)
 	// response header hooker
 	// 可以通过创建服务时传入options参数设置
 	WsRespHeader map[string][]string
