@@ -5,6 +5,7 @@ import (
 
 	"github.com/chenbaoding2818/chainly/config"
 	iface "github.com/chenbaoding2818/chainly/interface"
+	"github.com/gorilla/websocket"
 )
 
 var (
@@ -20,6 +21,16 @@ type ActorManager struct {
 	lock sync.Mutex
 }
 
+func (am *ActorManager) AddActor(actorId string, conn *websocket.Conn) {
+	am.actors.Store(actorId, &Actor{
+		Id:      actorId,
+		conn:    conn,
+		handler: am.handler,
+		mailbox: make(chan []byte),
+		quitCh:  make(chan struct{}),
+	})
+}
+
 func (am *ActorManager) RemoveActor(actorId string) {
 	am.actors.Delete(actorId)
 }
@@ -29,6 +40,9 @@ func (am *ActorManager) GetActor(actorId string) *Actor {
 	defer am.lock.Unlock()
 	if actor, ok := am.actors.Load(actorId); ok {
 		// 判断连接是否存在
+		if actor.(*Actor).conn != nil {
+
+		}
 		return actor.(*Actor)
 	}
 	// 不存在 则创建新actor

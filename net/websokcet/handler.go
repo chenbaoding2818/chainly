@@ -25,6 +25,7 @@ func (ws *WebsocketService) websocketUpgrader(ctx *gin.Context) {
 		wsCfg    = ws.cfg.Ws
 		conn     *websocket.Conn
 		authResp iface.IWsAuthResp
+		iconn    iface.IConnection
 		err      error
 	)
 	// 检测服务最大连接数 TODO: 如何判断？连接池管理进行判断？
@@ -49,13 +50,13 @@ func (ws *WebsocketService) websocketUpgrader(ctx *gin.Context) {
 	// 获取改连接的地址
 	ptr := uintptr(unsafe.Pointer(conn))
 
-	wsConn := NewWsConnection(conn)
-	connection.NewConnManager().AddConn(ptr, wsConn)
+	iconn = NewWsConnection(conn)
+	connection.NewConnManager().AddConn(ptr, iconn)
 	if authResp != nil {
 		authResp.GetAccount()
 	}
 
-	wsConn.Listen()
+	iconn.Listen()
 	// // 加入连接管理器
 	// actor.NewActorManager().GetActor("websocket")
 }
