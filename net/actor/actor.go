@@ -24,6 +24,9 @@ type Actor struct {
 	mailbox chan []byte
 	// 退出信号
 	quitCh chan struct{}
+	// 离线定时器 离线定时器（用于在离线一段时间后销毁自己）
+	// offlineTimer
+	//
 }
 
 func (a *Actor) Start() {

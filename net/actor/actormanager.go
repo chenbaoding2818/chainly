@@ -15,6 +15,8 @@ type ActorManager struct {
 	// key: actor id[player id or other id], value: actor
 	actors  sync.Map
 	handler config.IMesssageHandler
+	// TODO: 使用分段锁实现 提高并发能力
+	lock sync.Mutex
 }
 
 func (am *ActorManager) RemoveActor(actorId string) {
@@ -22,6 +24,8 @@ func (am *ActorManager) RemoveActor(actorId string) {
 }
 
 func (am *ActorManager) GetActor(actorId string) *Actor {
+	am.lock.Lock()
+	defer am.lock.Unlock()
 	if actor, ok := am.actors.Load(actorId); ok {
 		return actor.(*Actor)
 	}

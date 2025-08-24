@@ -42,7 +42,10 @@ func (ws *WebsocketService) websocketUpgrader(ctx *gin.Context) {
 	}
 	fmt.Printf("websocket connection established: %s\n", conn.RemoteAddr().String())
 	wsConn := NewWsConnection("", conn)
-	authResp.GetAccount()
+	if authResp != nil {
+		authResp.GetAccount()
+	}
+
 	wsConn.Listen()
 	// // 加入连接管理器
 	// actor.NewActorManager().GetActor("websocket")
