@@ -29,6 +29,10 @@ func NewSensitiveComponent() *NetManager {
 
 // Run 运行网络模块
 func (nm *NetManager) Run() {
+	// 检测websocket认证配置 为了安全考虑必须配置
+	if nm.cfg.Ws.WsAuthHooker == nil {
+		panic("websocket auth hooker is nil")
+	}
 	// 初始化actor模块
 	actor.NewActorManager(nm.cfg)
 	// 初始化连接管理器模块
