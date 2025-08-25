@@ -17,8 +17,6 @@ func (ws *WebsocketService) Route(route *gin.Engine) {
 	route.GET(ws.cfg.Ws.WsPath, ws.websocketUpgrader)
 }
 
-// account id关联 每个连接WSconn key:accountId value:WsConnection
-// 每个连接地址关联一个每个连接WSconn WS指向一个actor key:connAddr value:WsConnection
 func (ws *WebsocketService) websocketUpgrader(ctx *gin.Context) {
 	var (
 		wsCfg    = ws.cfg.Ws

@@ -20,7 +20,7 @@ type ActorManager struct {
 	lock    sync.Mutex
 }
 
-func (am *ActorManager) AddActor(actorId string, conn iface.IConnection) {
+func (am *ActorManager) AddActor(actorId string, actor *Actor) {
 	// 判断是否有旧的actor 有的话要删除旧的（异端踢号）保证玩家只能在一个端登陆
 	// TODO:待完善
 	if v, ok := am.actors.Load(actorId); ok {
@@ -34,13 +34,7 @@ func (am *ActorManager) AddActor(actorId string, conn iface.IConnection) {
 			oldActor.Stop()
 		}
 	}
-	am.actors.Store(actorId, &Actor{
-		Id:      actorId,
-		Conn:    conn,
-		handler: am.handler,
-		mailbox: make(chan []byte),
-		quitCh:  make(chan struct{}),
-	})
+	am.actors.Store(actorId, actor)
 }
 
 func (am *ActorManager) RemoveActor(actorId string) {

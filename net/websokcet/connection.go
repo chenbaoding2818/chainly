@@ -11,8 +11,6 @@ import (
 
 // 连接管理
 type WsConnection struct {
-	// // 连接ID
-	// ID string
 	// 玩家accountId
 	AccountId string
 	// 连接对象
@@ -26,7 +24,6 @@ type WsConnection struct {
 func NewWsConnection(conn *websocket.Conn) *WsConnection {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &WsConnection{
-		// ID:     id,
 		Conn:   conn,
 		ctx:    ctx,
 		cancel: cancel,
