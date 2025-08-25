@@ -17,7 +17,7 @@ type Actor struct {
 	// 玩家ID
 	Id string
 	// 连接
-	conn *websocket.Conn
+	Conn iface.IConnection
 	// handler 处理消息的函数
 	handler iface.IMessageHandler
 	// 消息队列(信箱)
@@ -30,7 +30,7 @@ type Actor struct {
 	isOnline bool
 }
 
-func (a *Actor) Start() {
+func (a *Actor) start() {
 	defer func() {
 		// TODO: 处理panic 因为在处理消息时，可能出现panic，需要处理
 		if err := recover(); err != nil {
@@ -72,9 +72,13 @@ func (a *Actor) SendMessage(msg []byte) {
 	a.mailbox <- msg
 }
 
-// processMessage 处理信箱中的消息
+// processMessage 处理信箱中的消息 要传入玩家信息 怎么传入玩家信息
 func (a *Actor) processMessage(msg []byte) error {
-	return a.handler.Handle(msg)
+	err := a.handler.Handle(msg)
+	if err != nil {
+		a.Conn.WriteMessage([]byte(err.Error()))
+	}
+	return err
 }
 
 func (a *Actor) Stop() {
@@ -85,10 +89,47 @@ func (a *Actor) Stop() {
 	// 同时通知管理器删除该Actor
 }
 
-func (a *Actor) GetConn() *websocket.Conn {
-	return a.conn
+func (a *Actor) GetConn() iface.IConnection {
+	return a.Conn
 }
 
 func (a *Actor) IsOnline() bool {
 	return a.isOnline
+}
+
+func (a *Actor) Listen() {
+	go func() {
+		for {
+			select {
+			// 关闭连接 例如正常退出、不同端顶号、服务异常等操作
+			case <-a.Conn.GetCtx().Done():
+				// TODO： 增加日志打印
+				return
+			default:
+				// 设置心跳时间
+				a.Conn.SetReadDeadline(time.Now().Add(time.Minute))
+				// 读取信息
+				msgType, msg, err := a.Conn.ReadMessage()
+				if err != nil { // 读取异常触发关闭事件
+					break
+				} else if msgType != websocket.BinaryMessage { // 数据类型不符，忽略本次信息
+					continue
+				} else { // 解析信息
+					fmt.Printf("receive message: %s\n", string(msg))
+					// 将消息发送给消息处理器
+					a.SendMessage(msg)
+				}
+			}
+		}
+	}()
+}
+
+func NewActor(conn iface.IConnection) *Actor {
+	actor := &Actor{
+		Conn:    conn,
+		mailbox: make(chan []byte, 100),
+		quitCh:  make(chan struct{}),
+	}
+	go actor.start()
+	return actor
 }

@@ -1,5 +1,5 @@
 package iface
 
 type IWsAuthResp interface {
-	GetAccount()
+	GetAccount() string
 }

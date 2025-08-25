@@ -14,6 +14,8 @@ import (
 type WsConnection struct {
 	// // 连接ID
 	// ID string
+	// 玩家accountId
+	AccountId string
 	// 连接对象
 	Conn *websocket.Conn
 	// actor对象
@@ -35,6 +37,30 @@ func NewWsConnection(conn *websocket.Conn) *WsConnection {
 	}
 }
 
+func (c *WsConnection) GetCancel() context.CancelFunc {
+	return c.cancel
+}
+
+func (c *WsConnection) GetCtx() context.Context {
+	return c.ctx
+}
+
+func (c *WsConnection) SetReadDeadline(t time.Time) error {
+	return c.Conn.SetReadDeadline(t)
+}
+
+func (c *WsConnection) ReadMessage() (int, []byte, error) {
+	return c.Conn.ReadMessage()
+}
+
+func (c *WsConnection) SetAccountId(accountId string) {
+	c.AccountId = accountId
+}
+
+func (c *WsConnection) GetAccountId() string {
+	return c.AccountId
+}
+
 func (c *WsConnection) Listen() {
 	go func() {
 		for {
@@ -49,7 +75,7 @@ func (c *WsConnection) Listen() {
 				// 读取信息
 				msgType, msg, err := c.Conn.ReadMessage()
 				if err != nil { // 读取异常触发关闭事件
-					break
+					c.cancel()
 				} else if msgType != websocket.BinaryMessage { // 数据类型不符，忽略本次信息
 					continue
 				} else { // 解析信息
@@ -60,5 +86,10 @@ func (c *WsConnection) Listen() {
 			}
 		}
 	}()
+}
 
+func (c *WsConnection) WriteMessage(msg []byte) error {
+	c.Lock.Lock()
+	defer c.Lock.Unlock()
+	return c.Conn.WriteMessage(websocket.BinaryMessage, msg)
 }

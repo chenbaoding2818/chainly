@@ -1,10 +1,9 @@
 package websokcet
 
 import (
-	"unsafe"
-
 	"github.com/chenbaoding2818/chainly/config"
 	iface "github.com/chenbaoding2818/chainly/interface"
+	"github.com/chenbaoding2818/chainly/net/actor"
 	"github.com/chenbaoding2818/chainly/net/connection"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -23,9 +22,9 @@ func (ws *WebsocketService) Route(route *gin.Engine) {
 func (ws *WebsocketService) websocketUpgrader(ctx *gin.Context) {
 	var (
 		wsCfg    = ws.cfg.Ws
-		conn     *websocket.Conn
+		wsConn   *websocket.Conn
 		authResp iface.IWsAuthResp
-		iconn    iface.IConnection
+		conn     iface.IConnection
 		err      error
 	)
 	// 检测服务最大连接数 TODO: 如何判断？连接池管理进行判断？
@@ -42,21 +41,21 @@ func (ws *WebsocketService) websocketUpgrader(ctx *gin.Context) {
 		}
 	}
 	// 协议升级
-	conn, err = wsCfg.Upgrader.Upgrade(ctx.Writer, ctx.Request, wsCfg.WsRespHeader)
+	wsConn, err = wsCfg.Upgrader.Upgrade(ctx.Writer, ctx.Request, wsCfg.WsRespHeader)
 	if err != nil {
 		// TODO: 增加日志打印Error
 		return
 	}
 	// 获取改连接的地址
-	ptr := uintptr(unsafe.Pointer(conn))
-
-	iconn = NewWsConnection(conn)
-	connection.NewConnManager().AddConn(ptr, iconn)
+	// ptr := uintptr(unsafe.Pointer(wsConn))
+	// connection.NewConnManager().AddConn(ptr, NewWsConnection(wsConn))
+	conn = NewWsConnection(wsConn)
 	if authResp != nil {
-		authResp.GetAccount()
+		// 设置玩家账号信息
+		conn.SetAccountId(authResp.GetAccount())
 	}
-
-	iconn.Listen()
-	// // 加入连接管理器
-	// actor.NewActorManager().GetActor("websocket")
+	// 创建一个actor
+	actor := actor.NewActor(conn)
+	// actor开始监听连接信息
+	actor.Listen()
 }
