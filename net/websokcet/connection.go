@@ -13,6 +13,8 @@ import (
 type WsConnection struct {
 	// 玩家accountId
 	AccountId string
+	// 玩家playerId
+	PlayerId string
 	// 连接对象
 	Conn   *websocket.Conn
 	ctx    context.Context
@@ -49,6 +51,10 @@ func (c *WsConnection) ReadMessage() (int, []byte, error) {
 
 func (c *WsConnection) SetAccountId(accountId string) {
 	c.AccountId = accountId
+}
+
+func (c *WsConnection) SetplayerId(playerId string) {
+	c.PlayerId = playerId
 }
 
 func (c *WsConnection) GetAccountId() string {

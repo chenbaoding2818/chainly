@@ -12,7 +12,7 @@ var (
 	ActorMgrOnce sync.Once
 )
 
-// TODO: 使用分段锁实现 提高并发能力
+// TODO: 使用分段锁实现 提高并发能力 全部操作需要加锁
 type ActorManager struct {
 	// key: actor id[player id or other id], value: actor
 	actors  sync.Map
@@ -32,6 +32,11 @@ func (am *ActorManager) AddActor(actorId string, actor *Actor) {
 			// 退出旧的连接监听
 			cancel()
 			oldActor.Stop()
+		} else {
+			oldActor.Conn = actor.Conn
+			oldActor.otherClientMsg = actor.otherClientMsg
+			oldActor.disconnecttionMsg = actor.disconnecttionMsg
+			actor = oldActor
 		}
 	}
 	am.actors.Store(actorId, actor)
@@ -62,12 +67,6 @@ func (am *ActorManager) GetActor(actorId string) *Actor {
 	// 启动actor
 	go actor.start()
 	return actor
-}
-
-func (am *ActorManager) Run() {
-	go func() {
-		// TODO: 实现actor清除管理
-	}()
 }
 
 func NewActorManager(cfg *config.Net) *ActorManager {

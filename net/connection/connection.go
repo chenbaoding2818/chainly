@@ -19,7 +19,7 @@ type ConnectionManager struct {
 }
 
 func (cm *ConnectionManager) AddConn(actor *actor.Actor) {
-	cm.Conns.Store(actor.GetConnPtr(), actor)
+	cm.Conns.Store(actor.Conn.GetConnPtr(), actor)
 }
 
 func (cm *ConnectionManager) DelConn(conn iface.IConnection) {

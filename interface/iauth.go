@@ -1,5 +1,6 @@
 package iface
 
 type IWsAuthResp interface {
-	GetAccount() string
+	GetAccountId() string
+	GetPlayerId() string
 }

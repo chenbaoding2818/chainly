@@ -10,6 +10,7 @@ type IConnection interface {
 	// Listen()
 	// 设置连接的玩家账号ID
 	SetAccountId(accountId string)
+	SetplayerId(playerId string)
 	// 获取连接的玩家账号ID
 	GetAccountId() string
 	GetConnPtr() uintptr

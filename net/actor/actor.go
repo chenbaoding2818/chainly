@@ -5,6 +5,7 @@ import (
 	"runtime/debug"
 	"time"
 
+	"github.com/chenbaoding2818/chainly/config"
 	iface "github.com/chenbaoding2818/chainly/interface"
 	"github.com/gorilla/websocket"
 )
@@ -34,6 +35,10 @@ type Actor struct {
 	otherClientMsg []byte
 }
 
+func (a *Actor) SetId(id string) {
+	a.Id = id
+}
+
 // SetDisconnectMsg 设置连接断开时需要处理的消息
 func (a *Actor) SetDisconnectMsg(msg []byte) {
 	a.disconnecttionMsg = msg
@@ -48,6 +53,7 @@ func (a *Actor) start() {
 		// TODO: 处理panic 因为在处理消息时，可能出现panic，需要处理
 		if err := recover(); err != nil {
 			debug.PrintStack()
+			// TODO: 重新监听信箱
 		}
 	}()
 
@@ -103,7 +109,7 @@ func (a *Actor) SendMessage(msgType int, msg []byte, err error) {
 // processMessage 处理信箱中的消息 要传入玩家信息 怎么传入玩家信息
 func (a *Actor) processMessage(msg []byte) error {
 	err := a.handler.Handle(a.Conn.GetConnPtr(), msg)
-	if err != nil {
+	if err != nil && a.Conn != nil {
 		a.Conn.WriteMessage([]byte(err.Error()))
 	}
 	return err
@@ -145,13 +151,14 @@ func (a *Actor) ListenConn() {
 	}()
 }
 
-func NewActor(conn iface.IConnection) *Actor {
+func NewActor(conn iface.IConnection, cfg *config.Net) *Actor {
 	actor := &Actor{
 		Conn:    conn,
-		mailbox: make(chan []byte, 100),
+		mailbox: make(chan []byte),
 		quitCh:  make(chan struct{}),
+		handler: cfg.MessageHandler,
 	}
-	// 开启信箱监听
+	// 开启消息信箱监听
 	go actor.start()
 	return actor
 }
