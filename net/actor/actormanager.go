@@ -21,6 +21,8 @@ type ActorManager struct {
 }
 
 func (am *ActorManager) AddActor(actorId string, conn iface.IConnection) {
+	// 判断是否有旧的actor 有的话要删除旧的（异端踢号）保证玩家只能在一个端登陆
+
 	am.actors.Store(actorId, &Actor{
 		Id:      actorId,
 		Conn:    conn,

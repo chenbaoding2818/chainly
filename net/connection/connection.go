@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	iface "github.com/chenbaoding2818/chainly/interface"
+	"github.com/chenbaoding2818/chainly/net/actor"
 )
 
 var (
@@ -17,8 +18,8 @@ type ConnectionManager struct {
 	Conns sync.Map // 连接池
 }
 
-func (cm *ConnectionManager) AddConn(ptr uintptr, conn iface.IConnection) {
-	cm.Conns.Store(ptr, conn)
+func (cm *ConnectionManager) AddConn(actor *actor.Actor) {
+	cm.Conns.Store(actor.Conn.GetConnPtr(), actor)
 }
 
 func (cm *ConnectionManager) DelConn(conn iface.IConnection) {
@@ -29,7 +30,7 @@ func (cm *ConnectionManager) GetConn(addr string) iface.IConnection {
 	return nil
 }
 
-// Len 连接数量
+// Len 连接数量 TODO: 目前使用遍历的手段统计连接数，后期可以考虑维护一个计数器，但是复杂度会增加
 func (cm *ConnectionManager) Len() int {
 	var count int
 	cm.Conns.Range(func(key, value interface{}) bool {

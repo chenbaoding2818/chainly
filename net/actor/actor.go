@@ -11,7 +11,7 @@ import (
 
 var idleDuration = 10 * time.Minute
 
-// Actor 每个玩家持有一个Actor对象，用于处理消息
+// Actor 每个连接/玩家拥有一个Actor对象，用于处理消息 保证数据并发安全
 // 什么时候回收Actor对象？
 type Actor struct {
 	// 玩家ID
@@ -20,7 +20,7 @@ type Actor struct {
 	Conn iface.IConnection
 	// handler 处理消息的函数
 	handler iface.IMessageHandler
-	// 消息队列(信箱)
+	// 消息队列(信箱) 玩家所有需要处理的消息全部进入信箱才能被处理 保证数据并发安全
 	mailbox chan []byte
 	// 退出信号
 	quitCh chan struct{}
@@ -28,6 +28,15 @@ type Actor struct {
 	// offlineTimer
 	//
 	isOnline bool
+	// 断开连接需要处理消息
+	disconnecttionMsg []byte
+	// 异端登陆时，旧连接需要断开
+
+}
+
+// SetDisconnectMsg 设置连接断开时需要处理的消息
+func (a *Actor) SetDisconnectMsg(msg []byte) {
+	a.disconnecttionMsg = msg
 }
 
 func (a *Actor) start() {
@@ -49,7 +58,6 @@ func (a *Actor) start() {
 			fmt.Printf("Actor %s received message: %v\n", a.Id, msg)
 			// 如果处理笑消息有问题，则需要处理错误
 			a.processMessage(msg)
-
 			// if !idleTimer.Stop() {
 			// 	<-idleTimer.C
 			// }
@@ -68,13 +76,29 @@ func (a *Actor) start() {
 	}
 }
 
-func (a *Actor) SendMessage(msg []byte) {
+func (a *Actor) ConnClose() {
+	a.Conn.Close()
+	a.Conn = nil
+}
+
+func (a *Actor) SendMessage(msgType int, msg []byte, err error) {
+	// 读取异常触发关闭事件
+	if err != nil {
+		// 连接关闭
+		a.ConnClose()
+		// 连接关闭就是玩家登出
+		// 将玩家登出的消息放入信箱进行串行处理，保证数据并发安全
+		msg = a.disconnecttionMsg
+	} else if msgType != websocket.BinaryMessage {
+		return
+	}
+
 	a.mailbox <- msg
 }
 
 // processMessage 处理信箱中的消息 要传入玩家信息 怎么传入玩家信息
 func (a *Actor) processMessage(msg []byte) error {
-	err := a.handler.Handle(msg)
+	err := a.handler.Handle(a.Conn.GetConnPtr(), msg)
 	if err != nil {
 		a.Conn.WriteMessage([]byte(err.Error()))
 	}
@@ -97,7 +121,7 @@ func (a *Actor) IsOnline() bool {
 	return a.isOnline
 }
 
-func (a *Actor) Listen() {
+func (a *Actor) ListenConn() {
 	go func() {
 		for {
 			select {
@@ -109,16 +133,7 @@ func (a *Actor) Listen() {
 				// 设置心跳时间
 				a.Conn.SetReadDeadline(time.Now().Add(time.Minute))
 				// 读取信息
-				msgType, msg, err := a.Conn.ReadMessage()
-				if err != nil { // 读取异常触发关闭事件
-					break
-				} else if msgType != websocket.BinaryMessage { // 数据类型不符，忽略本次信息
-					continue
-				} else { // 解析信息
-					fmt.Printf("receive message: %s\n", string(msg))
-					// 将消息发送给消息处理器
-					a.SendMessage(msg)
-				}
+				a.SendMessage(a.Conn.ReadMessage())
 			}
 		}
 	}()
@@ -130,6 +145,7 @@ func NewActor(conn iface.IConnection) *Actor {
 		mailbox: make(chan []byte, 100),
 		quitCh:  make(chan struct{}),
 	}
+	// 开启信箱监听
 	go actor.start()
 	return actor
 }

@@ -27,7 +27,7 @@ func (ws *WebsocketService) websocketUpgrader(ctx *gin.Context) {
 		conn     iface.IConnection
 		err      error
 	)
-	// 检测服务最大连接数 TODO: 如何判断？连接池管理进行判断？
+	// 检测服务最大连接数
 	if connection.NewConnManager().Len() > ws.cfg.MaxConn {
 		// TODO: 增加日志打印Error
 		return
@@ -46,9 +46,7 @@ func (ws *WebsocketService) websocketUpgrader(ctx *gin.Context) {
 		// TODO: 增加日志打印Error
 		return
 	}
-	// 获取改连接的地址
-	// ptr := uintptr(unsafe.Pointer(wsConn))
-	// connection.NewConnManager().AddConn(ptr, NewWsConnection(wsConn))
+
 	conn = NewWsConnection(wsConn)
 	if authResp != nil {
 		// 设置玩家账号信息
@@ -56,6 +54,8 @@ func (ws *WebsocketService) websocketUpgrader(ctx *gin.Context) {
 	}
 	// 创建一个actor
 	actor := actor.NewActor(conn)
+	// 获取改连接的地址
+	connection.NewConnManager().AddConn(actor)
 	// actor开始监听连接信息
-	actor.Listen()
+	actor.ListenConn()
 }
