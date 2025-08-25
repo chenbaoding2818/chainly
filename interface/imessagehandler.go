@@ -5,22 +5,3 @@ package iface
 type IMessageHandler interface {
 	Handle(connPtr uintptr, msg []byte) error
 }
-
-// 怎么使用？
-type GameWsHandler struct{}
-
-func (gh *GameWsHandler) Handle(connPtr uintptr, msg []byte) error {
-	// 反序列化msg变成游戏定义的消息
-	// 伪代码：
-	// 1、根据msg的cmdid,找到对应的处理函数
-	// 2、调用处理函数处理消息
-	// 3、返回处理结果 如果有error，则返回error 调用底层返回错误信息
-
-	// 这样的好处是：1、可以统一记录每个协议的操作记录
-
-	return nil
-}
-
-func NewGamweHandler() IMessageHandler {
-	return &GameWsHandler{}
-}

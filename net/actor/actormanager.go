@@ -12,17 +12,28 @@ var (
 	ActorMgrOnce sync.Once
 )
 
+// TODO: 使用分段锁实现 提高并发能力
 type ActorManager struct {
 	// key: actor id[player id or other id], value: actor
 	actors  sync.Map
 	handler iface.IMessageHandler
-	// TODO: 使用分段锁实现 提高并发能力
-	lock sync.Mutex
+	lock    sync.Mutex
 }
 
 func (am *ActorManager) AddActor(actorId string, conn iface.IConnection) {
 	// 判断是否有旧的actor 有的话要删除旧的（异端踢号）保证玩家只能在一个端登陆
-
+	// TODO:待完善
+	if v, ok := am.actors.Load(actorId); ok {
+		oldActor := v.(*Actor)
+		if oldActor.Conn != nil {
+			// 旧的actor有连接 则通知旧的actor 断开连接
+			oldActor.Conn.WriteMessage(oldActor.otherClientMsg)
+			cancel := oldActor.Conn.GetCancel()
+			// 退出旧的连接监听
+			cancel()
+			oldActor.Stop()
+		}
+	}
 	am.actors.Store(actorId, &Actor{
 		Id:      actorId,
 		Conn:    conn,

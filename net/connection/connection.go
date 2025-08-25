@@ -14,16 +14,23 @@ var (
 
 // ConnectionManager 连接管理器
 type ConnectionManager struct {
-	// ws连接map key: 连接的地址， value: 连接对象
+	// ws连接map key: 连接的地址， value: 连接对象(actor)
 	Conns sync.Map // 连接池
 }
 
 func (cm *ConnectionManager) AddConn(actor *actor.Actor) {
-	cm.Conns.Store(actor.Conn.GetConnPtr(), actor)
+	cm.Conns.Store(actor.GetConnPtr(), actor)
 }
 
 func (cm *ConnectionManager) DelConn(conn iface.IConnection) {
 
+}
+
+func (cm *ConnectionManager) GetActor(ptr uintptr) *actor.Actor {
+	if v, ok := cm.Conns.Load(ptr); ok {
+		return v.(*actor.Actor)
+	}
+	return nil
 }
 
 func (cm *ConnectionManager) GetConn(addr string) iface.IConnection {

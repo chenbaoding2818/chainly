@@ -31,12 +31,16 @@ type Actor struct {
 	// 断开连接需要处理消息
 	disconnecttionMsg []byte
 	// 异端登陆时，旧连接需要断开
-
+	otherClientMsg []byte
 }
 
 // SetDisconnectMsg 设置连接断开时需要处理的消息
 func (a *Actor) SetDisconnectMsg(msg []byte) {
 	a.disconnecttionMsg = msg
+}
+
+func (a *Actor) SetOtherClientMsg(msg []byte) {
+	a.otherClientMsg = msg
 }
 
 func (a *Actor) start() {
@@ -110,7 +114,9 @@ func (a *Actor) Stop() {
 	close(a.mailbox)
 	// 关闭退出信号
 	close(a.quitCh)
-	// 同时通知管理器删除该Actor
+	if a.Conn != nil {
+		a.Conn.Close()
+	}
 }
 
 func (a *Actor) GetConn() iface.IConnection {
