@@ -156,7 +156,7 @@ func NewActor(conn iface.IConnection, cfg *config.Net) *Actor {
 		Conn:    conn,
 		mailbox: make(chan []byte),
 		quitCh:  make(chan struct{}),
-		handler: cfg.MessageHandler,
+		handler: cfg.MessageHandler, // 消息处理器
 	}
 	// 开启消息信箱监听
 	go actor.start()

@@ -13,11 +13,28 @@ const (
 	YamlParser
 )
 
+// Basic 定义服务基础配置
 type Basic struct {
+	// 游戏服务名称
+	GameName string
+	// 服务名称
+	RegionName string
+	// 平台id
+	PlatformId int
+	// 区服id
+	ServerId int
+	// 运行模式 0:开发模式 1:测试模式 2:正式模式
+	RunMode int
 }
 
 func NewDefaultBasicCfg() *Basic {
-	return &Basic{}
+	return &Basic{
+		GameName:   "chainly",
+		RegionName: "测试服",
+		PlatformId: 0,
+		ServerId:   1,
+		RunMode:    0,
+	}
 }
 
 // Config 定义服务基础配置文件结构
@@ -34,11 +51,13 @@ type Config struct {
 	StorageCfg *Storage
 	// 关于日志的配置
 	LogCfg *Log
-	// 自定义配置项 用户可根据自己的项目自定义自己的配置项
+	// 消息队列相关配置
+	MQCfg *MsgQueue
+	// 自定义配置项 用户可根据自己的项目自定义自己的配置项 用于扩展
 	CustomCfgFields map[string]interface{}
 }
 
-func NewConfig(path string, parser ConfigParser) *Config {
+func NewConfig(path string) *Config {
 	if len(path) == 0 {
 		panic("config path is empty")
 	}
@@ -47,21 +66,17 @@ func NewConfig(path string, parser ConfigParser) *Config {
 	if len(pathSplitList) < 2 {
 		panic("config path is invalid")
 	}
-
+	var parser ConfigParser
 	switch pathSplitList[len(pathSplitList)-1] {
 	case "ini":
 		parser = IniParser
 	case "json":
 		parser = JsonParser
-	case "yaml":
+	case "yaml", "YAML":
 		parser = YamlParser
 	default:
 		panic("config file type is invalid")
 	}
-	if parser < IniParser || parser > YamlParser {
-		panic("config parser is invalid")
-	}
-
 	cfg := NewDefaultConfig()
 	cfg.Path = path
 	cfg.Parser = parser

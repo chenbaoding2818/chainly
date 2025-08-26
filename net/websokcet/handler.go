@@ -55,6 +55,8 @@ func (ws *WebsocketService) websocketUpgrader(ctx *gin.Context) {
 		// 设置玩家id信息
 		conn.SetplayerId(authResp.GetPlayerId())
 	}
+	// 检测连接中玩家的信息
+
 	// 创建一个actor 每个连接对应一个actor
 	actor := actor.NewActor(conn, ws.cfg)
 	// 连接管理器添加新的连接
