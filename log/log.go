@@ -20,7 +20,6 @@ var (
 type Logger struct {
 	name     string
 	serverId int
-	level    zerolog.Level
 	log      zerolog.Logger
 }
 
@@ -33,10 +32,6 @@ func NewLogger(config *config.Config) iface.ILog {
 			} else {
 				writers = append(writers, &StdoutWriter{os.Stdout})
 			}
-			// 是否开启远程日志
-			if config.LogCfg.ServerLog.RemoteEnabled {
-				writers = append(writers, &RemoteWriter{})
-			}
 			var multiWriter io.Writer
 			// 系统日志是否开启异步写入
 			if config.LogCfg.ServerLog.AsyncEnabled {
@@ -45,6 +40,7 @@ func NewLogger(config *config.Config) iface.ILog {
 					config.LogCfg.ServerLog.BatchSize,
 					multiW)
 				multiWriter = bufferWriter.multiWriter
+				// 启动异步写入
 				go bufferWriter.run()
 			} else {
 				multiWriter = zerolog.MultiLevelWriter(writers...)
@@ -53,11 +49,15 @@ func NewLogger(config *config.Config) iface.ILog {
 			zerolog.SetGlobalLevel(zerolog.Level(config.LogCfg.Level))
 			// 设置日志时间格式
 			zerolog.TimeFieldFormat = time.RFC3339
-			l := zerolog.New(multiWriter)
+			// 创建日志对象
 			logger = &Logger{
 				name:     config.BasicCfg.GameName,
 				serverId: config.BasicCfg.ServerId,
-				log:      l.With().Timestamp().Logger().Hook(nil),
+				log: zerolog.New(multiWriter).
+					With().
+					Timestamp().
+					Logger().
+					Hook(NewDefaultCallerHook(), NewRemoterHook(*config.LogCfg.OperationLog)),
 			}
 		}
 	})

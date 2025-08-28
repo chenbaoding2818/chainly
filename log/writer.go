@@ -25,6 +25,7 @@ func (w *StdoutWriter) Write(p []byte) (n int, err error) {
 	return w.stdout.Write(p)
 }
 
+// RemoteWriter 日志信息通过远程服务进行收集
 type RemoteWriter struct {
 	batchSize int32
 	channel   chan []byte
