@@ -24,3 +24,8 @@ type ILog interface {
 	// Report专门上报行为日志、运营日志
 	Report(msg []byte)
 }
+
+type ILogProducer interface {
+	SendMsg(msg []byte) error
+	// SendMsgBatch(msgs [][]byte) error
+}
