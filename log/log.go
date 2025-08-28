@@ -53,7 +53,7 @@ func NewLogger(config *config.Config) iface.ILog {
 			hooks := make([]zerolog.Hook, 0)
 			hooks = append(hooks, NewDefaultCallerHook())
 			if config.LogCfg.OperationLog.RemoteEnabled {
-				hooks = append(hooks, NewRemoterHook(*config.LogCfg.OperationLog))
+				hooks = append(hooks, NewRemoterHook(*config.LogCfg.OperationLog, *config.MQCfg))
 			}
 
 			// 创建日志对象

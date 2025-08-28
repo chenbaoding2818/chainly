@@ -24,17 +24,16 @@ type RemoterHook struct {
 	producer iface.ILogProducer
 }
 
-func NewRemoterHook(cfg config.OperationLog) zerolog.Hook {
+func NewRemoterHook(cfg config.OperationLog, mgCfg config.MsgQueue) zerolog.Hook {
 	var producer iface.ILogProducer
 	switch iface.MQType(cfg.MQType) {
 	case iface.Rabbit:
-		producer = &RabbitMQ{}
+		producer = NewRabbitMQ(cfg, mgCfg)
 	case iface.Kafka:
-		producer = &Kafka{}
+		producer = NewKafka(cfg, mgCfg)
 	default:
 		panic("unknown mq type")
 	}
-
 	return RemoterHook{
 		buffer:   make(chan []byte, 1000),
 		producer: producer,

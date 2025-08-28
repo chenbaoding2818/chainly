@@ -5,9 +5,7 @@ type BaseLog struct {
 	RemoteEnabled bool
 	// 缓冲区大小
 	BufferChanelSize int32
-	// 是否开启批量发送（开启会减少大量的网络io，但是会有丢失部分日志的风险，一般情况下是允许丢失一部分日志的）
-	BatchEnabled bool
-	// 批量发送的大小
+	// 批量发送的大小 （开启会减少大量的网络io，但是会有丢失部分日志的风险，一般情况下是允许丢失一部分日志的）
 	BatchSize int32
 	// 消息队列的类型 支持的mq目前有1:rabbitmq 2:kafka
 	MQType int8

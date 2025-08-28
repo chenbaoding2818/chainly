@@ -34,5 +34,4 @@ const (
 
 type ILogProducer interface {
 	SendMsg(msg []byte) error
-	// SendMsgBatch(msgs [][]byte) error
 }
