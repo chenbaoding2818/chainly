@@ -49,6 +49,13 @@ func NewLogger(config *config.Config) iface.ILog {
 			zerolog.SetGlobalLevel(zerolog.Level(config.LogCfg.Level))
 			// 设置日志时间格式
 			zerolog.TimeFieldFormat = time.RFC3339
+
+			hooks := make([]zerolog.Hook, 0)
+			hooks = append(hooks, NewDefaultCallerHook())
+			if config.LogCfg.OperationLog.RemoteEnabled {
+				hooks = append(hooks, NewRemoterHook(*config.LogCfg.OperationLog))
+			}
+
 			// 创建日志对象
 			logger = &Logger{
 				name:     config.BasicCfg.GameName,
@@ -57,7 +64,7 @@ func NewLogger(config *config.Config) iface.ILog {
 					With().
 					Timestamp().
 					Logger().
-					Hook(NewDefaultCallerHook(), NewRemoterHook(*config.LogCfg.OperationLog)),
+					Hook(hooks...),
 			}
 		}
 	})

@@ -2,6 +2,7 @@ package log
 
 import (
 	"github.com/chenbaoding2818/chainly/config"
+	iface "github.com/chenbaoding2818/chainly/interface"
 	"github.com/rs/zerolog"
 )
 
@@ -19,10 +20,25 @@ func (ch callerHook) Run(e *zerolog.Event, level zerolog.Level, msg string) {
 }
 
 type RemoterHook struct {
+	buffer   chan []byte
+	producer iface.ILogProducer
 }
 
 func NewRemoterHook(cfg config.OperationLog) zerolog.Hook {
-	return RemoterHook{}
+	var producer iface.ILogProducer
+	switch iface.MQType(cfg.MQType) {
+	case iface.Rabbit:
+		producer = &RabbitMQ{}
+	case iface.Kafka:
+		producer = &Kafka{}
+	default:
+		panic("unknown mq type")
+	}
+
+	return RemoterHook{
+		buffer:   make(chan []byte, 1000),
+		producer: producer,
+	}
 }
 
 func (rh RemoterHook) Run(e *zerolog.Event, level zerolog.Level, msg string) {
