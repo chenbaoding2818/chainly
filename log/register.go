@@ -16,8 +16,8 @@ var (
 type LogManager struct {
 }
 
-func (lm *LogManager) Start(ctx context.Context, cfg *config.Config) {
-	NewLogger(ctx, cfg)
+func (lm *LogManager) Start(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config) {
+	NewLogger(ctx, wg, cfg)
 }
 
 func (lm *LogManager) Priority() int32 {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/chenbaoding2818/chainly/config"
@@ -17,24 +18,26 @@ var (
 type RabbitMQ struct {
 	bufferChanel chan []byte
 	batchSize    int32
-	timer        *time.Timer
+	ticker       *time.Ticker
 	// 通道关闭时 发送剩余的消息
 	ctx context.Context
+	wg  *sync.WaitGroup
 }
 
-func NewRabbitMQ(ctx context.Context, cfg config.OperationLog, mgCfg config.MsgQueue) *RabbitMQ {
+func NewRabbitMQ(ctx context.Context, wg *sync.WaitGroup, cfg config.OperationLog, mgCfg config.MsgQueue) *RabbitMQ {
 	mq := &RabbitMQ{
 		ctx:          ctx,
 		bufferChanel: make(chan []byte, cfg.BufferChanelSize),
 		batchSize:    cfg.BatchSize,
+		wg:           wg,
 	}
 
 	if cfg.BatchSize > 1 {
 		// 1分钟超时 1分钟内如果没有累计到足够的消息，则强制发送
-		mq.timer = time.NewTimer(flushInterval)
+		mq.ticker = time.NewTicker(flushInterval)
 		go mq.runBatch()
 	} else {
-
+		go mq.run()
 	}
 	return mq
 }
@@ -51,7 +54,9 @@ func (r *RabbitMQ) SendMsg(msg []byte) error {
 
 // run 运行消费协程
 func (r *RabbitMQ) runBatch() {
+	r.wg.Add(1)
 	go func() {
+		defer r.wg.Done()
 		msgs := make([][]byte, 0, r.batchSize)
 		for {
 			select {
@@ -60,15 +65,17 @@ func (r *RabbitMQ) runBatch() {
 					if len(msgs) < int(r.batchSize) {
 						msgs = append(msgs, msg)
 					} else {
-						msgs = append(msgs, msg)
-						r.public(msgs)
+						_msg := r.combineMessages(msgs)
+						r.public(_msg)
 						msgs = msgs[:0]
 					}
 				}
-			case <-r.timer.C:
-				r.public(msgs)
+			case <-r.ticker.C:
+				r.public(r.combineMessages(msgs))
 			case <-r.ctx.Done():
-				r.public(msgs)
+				// 关闭通道时，将剩余的消息发送出去
+				close(r.bufferChanel)
+				r.public(r.combineMessages(msgs))
 				return
 			}
 		}
@@ -77,17 +84,29 @@ func (r *RabbitMQ) runBatch() {
 
 // run 运行消费协程
 func (r *RabbitMQ) run() {
+	r.wg.Add(1)
 	go func() {
+		defer r.wg.Done()
 		for {
 			select {
 			case msg := <-r.bufferChanel:
-				r.public([][]byte{msg})
+				r.public(msg)
+			case <-r.ctx.Done():
+				close(r.bufferChanel)
+				// 关闭通道时，将剩余的消息发送出去
+				for msg := range r.bufferChanel {
+					r.public(msg)
+				}
 			}
 		}
 	}()
 }
 
-func (r *RabbitMQ) public(msgs [][]byte) {
+func (r *RabbitMQ) public(msgs []byte) {
+	// 空数据检测
+	if len(msgs) == 0 {
+		return
+	}
 
 }
 

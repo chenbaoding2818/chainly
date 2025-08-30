@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"sync"
 
 	"github.com/chenbaoding2818/chainly/config"
@@ -18,7 +19,7 @@ type NetManager struct {
 	cfg *config.Net
 }
 
-func (nm *NetManager) Start(ctx, cfg *config.Config) {
+func (nm *NetManager) Start(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config) {
 	nm.cfg = cfg.NetCfg
 	// 检测websocket认证配置 为了安全考虑必须配置
 	if nm.cfg.Ws.WsAuthHooker == nil {

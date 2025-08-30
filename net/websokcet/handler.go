@@ -3,6 +3,7 @@ package websokcet
 import (
 	"github.com/chenbaoding2818/chainly/config"
 	iface "github.com/chenbaoding2818/chainly/interface"
+	"github.com/chenbaoding2818/chainly/log"
 	"github.com/chenbaoding2818/chainly/net/actor"
 	"github.com/chenbaoding2818/chainly/net/connection"
 	"github.com/gin-gonic/gin"
@@ -27,24 +28,24 @@ func (ws *WebsocketService) websocketUpgrader(ctx *gin.Context) {
 	)
 	// 检测服务最大连接数
 	if connection.NewConnManager().Len() > ws.cfg.MaxConn {
-		// TODO: 增加日志打印Error
+		log.Error("websocket service max connection reach")
 		return
 	}
 	// 进行websocket认证 必须进行认证
 	if wsCfg.WsAuthHooker == nil {
-		// TODO: 增加日志打印Error
+		log.Error("websocket service auth hooker is nil")
 		return
 	}
 	authResp, err = wsCfg.WsAuthHooker(ctx.Request)
 	if err != nil {
-		// TODO: 增加日志打印Error
 		ctx.AbortWithStatusJSON(401, gin.H{"error": err.Error()})
+		log.Errorf("websocket service auth hooker error: %s", err.Error())
 		return
 	}
 	// 协议升级
 	wsConn, err = wsCfg.Upgrader.Upgrade(ctx.Writer, ctx.Request, wsCfg.WsRespHeader)
 	if err != nil {
-		// TODO: 增加日志打印Error
+		log.Errorf("websocket service upgrade error: %s", err.Error())
 		return
 	}
 	// 处理每个连接

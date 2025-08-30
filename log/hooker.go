@@ -3,6 +3,7 @@ package log
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/chenbaoding2818/chainly/config"
 	iface "github.com/chenbaoding2818/chainly/interface"
@@ -27,11 +28,12 @@ type RemoterHook struct {
 	producer iface.ILogProducer
 }
 
-func NewRemoterHook(ctx context.Context, cfg config.OperationLog, mgCfg config.MsgQueue) zerolog.Hook {
+// 创建日志对象
+func NewRemoterHook(ctx context.Context, wg *sync.WaitGroup, cfg config.OperationLog, mgCfg config.MsgQueue) zerolog.Hook {
 	var producer iface.ILogProducer
 	switch iface.MQType(cfg.MQType) {
 	case iface.Rabbit:
-		producer = NewRabbitMQ(ctx, cfg, mgCfg)
+		producer = NewRabbitMQ(ctx, wg, cfg, mgCfg)
 	case iface.Kafka:
 		producer = NewKafka(ctx, cfg, mgCfg)
 	default:

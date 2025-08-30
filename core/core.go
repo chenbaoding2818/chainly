@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/chenbaoding2818/chainly/config"
@@ -46,8 +47,9 @@ func (s *Server) RegisterComponent(lifecycle lifecycle.Lifecycle) {
 }
 
 func (s *Server) Run() {
+	wg := new(sync.WaitGroup)
 	ctx, cancel := context.WithCancel(context.Background())
-	lifecycle.NewLifecycleManager(s.cfg).Start(ctx)
+	lifecycle.NewLifecycleManager(s.cfg).Start(ctx, wg)
 	log.Info("server start")
 	signals := make(chan os.Signal, 1)
 	signalList := []os.Signal{
@@ -60,6 +62,7 @@ func (s *Server) Run() {
 	signal.Notify(signals, signalList...)
 	<-signals
 	cancel()
+	wg.Wait()
 	lifecycle.LifecycleMgr.Stop()
 	log.Info("server shutting down")
 }
