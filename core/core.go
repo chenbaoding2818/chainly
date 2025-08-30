@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"syscall"
@@ -45,8 +46,9 @@ func (s *Server) RegisterComponent(lifecycle lifecycle.Lifecycle) {
 }
 
 func (s *Server) Run() {
-	lifecycle.NewLifecycleManager(s.cfg).Start()
-	// log.Info("server start")
+	ctx, cancel := context.WithCancel(context.Background())
+	lifecycle.NewLifecycleManager(s.cfg).Start(ctx)
+	log.Info("server start")
 	signals := make(chan os.Signal, 1)
 	signalList := []os.Signal{
 		os.Interrupt,
@@ -57,6 +59,7 @@ func (s *Server) Run() {
 	}
 	signal.Notify(signals, signalList...)
 	<-signals
+	cancel()
 	lifecycle.LifecycleMgr.Stop()
-	// log.Info("server shutting down")
+	log.Info("server shutting down")
 }

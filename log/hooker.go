@@ -1,6 +1,9 @@
 package log
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/chenbaoding2818/chainly/config"
 	iface "github.com/chenbaoding2818/chainly/interface"
 	"github.com/rs/zerolog"
@@ -24,13 +27,13 @@ type RemoterHook struct {
 	producer iface.ILogProducer
 }
 
-func NewRemoterHook(cfg config.OperationLog, mgCfg config.MsgQueue) zerolog.Hook {
+func NewRemoterHook(ctx context.Context, cfg config.OperationLog, mgCfg config.MsgQueue) zerolog.Hook {
 	var producer iface.ILogProducer
 	switch iface.MQType(cfg.MQType) {
 	case iface.Rabbit:
-		producer = NewRabbitMQ(cfg, mgCfg)
+		producer = NewRabbitMQ(ctx, cfg, mgCfg)
 	case iface.Kafka:
-		producer = NewKafka(cfg, mgCfg)
+		producer = NewKafka(ctx, cfg, mgCfg)
 	default:
 		panic("unknown mq type")
 	}
@@ -43,9 +46,9 @@ func NewRemoterHook(cfg config.OperationLog, mgCfg config.MsgQueue) zerolog.Hook
 func (rh RemoterHook) Run(e *zerolog.Event, level zerolog.Level, msg string) {
 	// 运营业务的日志，发送到消息队列
 	if level == zerolog.NoLevel {
-		// if err := rh.producer.SendMsg([]byte(msg)); err != nil {
-		// 	fmt.Println("rabbitmq hook send msg error:", err)
-		// }
+		if err := rh.producer.SendMsg([]byte(msg)); err != nil {
+			logger.Error(fmt.Sprintf("send operation msg to mq failed, err: %v", err))
+		}
 		e.Discard()
 	}
 }

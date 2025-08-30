@@ -8,6 +8,7 @@ import (
 
 	"github.com/chenbaoding2818/chainly/config"
 	iface "github.com/chenbaoding2818/chainly/interface"
+	"golang.org/x/net/context"
 
 	"github.com/rs/zerolog"
 )
@@ -23,7 +24,7 @@ type Logger struct {
 	log      zerolog.Logger
 }
 
-func NewLogger(config *config.Config) iface.ILog {
+func NewLogger(ctx context.Context, config *config.Config) iface.ILog {
 	loggerOnce.Do(func() {
 		if logger == nil {
 			writers := make([]io.Writer, 0)
@@ -49,13 +50,13 @@ func NewLogger(config *config.Config) iface.ILog {
 			zerolog.SetGlobalLevel(zerolog.Level(config.LogCfg.Level))
 			// 设置日志时间格式
 			zerolog.TimeFieldFormat = time.RFC3339
-
-			hooks := make([]zerolog.Hook, 0)
-			hooks = append(hooks, NewDefaultCallerHook())
+			// 创建hooker
+			hookers := make([]zerolog.Hook, 0)
+			hookers = append(hookers, NewDefaultCallerHook())
 			if config.LogCfg.OperationLog.RemoteEnabled {
-				hooks = append(hooks, NewRemoterHook(*config.LogCfg.OperationLog, *config.MQCfg))
+				rh := NewRemoterHook(ctx, *config.LogCfg.OperationLog, *config.MQCfg)
+				hookers = append(hookers, rh)
 			}
-
 			// 创建日志对象
 			logger = &Logger{
 				name:     config.BasicCfg.GameName,
@@ -64,7 +65,7 @@ func NewLogger(config *config.Config) iface.ILog {
 					With().
 					Timestamp().
 					Logger().
-					Hook(hooks...),
+					Hook(hookers...),
 			}
 		}
 	})

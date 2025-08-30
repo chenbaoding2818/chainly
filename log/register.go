@@ -1,6 +1,7 @@
 package log
 
 import (
+	"context"
 	"sync"
 
 	"github.com/chenbaoding2818/chainly/config"
@@ -15,8 +16,8 @@ var (
 type LogManager struct {
 }
 
-func (lm *LogManager) Start(cfg *config.Config) {
-	NewLogger(cfg)
+func (lm *LogManager) Start(ctx context.Context, cfg *config.Config) {
+	NewLogger(ctx, cfg)
 }
 
 func (lm *LogManager) Priority() int32 {

@@ -1,11 +1,15 @@
 package log
 
-import "github.com/chenbaoding2818/chainly/config"
+import (
+	"context"
+
+	"github.com/chenbaoding2818/chainly/config"
+)
 
 type Kafka struct {
 }
 
-func NewKafka(cfg config.OperationLog, mgCfg config.MsgQueue) *Kafka {
+func NewKafka(ctx context.Context, cfg config.OperationLog, mgCfg config.MsgQueue) *Kafka {
 	return &Kafka{}
 }
 

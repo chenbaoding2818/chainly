@@ -1,6 +1,7 @@
 package sensitive
 
 import (
+	"context"
 	"os"
 	"strings"
 	"sync"
@@ -17,7 +18,7 @@ var (
 type SensitiveManager struct {
 }
 
-func (sm *SensitiveManager) Start(cfg *config.Config) {
+func (sm *SensitiveManager) Start(ctx context.Context, cfg *config.Config) {
 	// TODO: 加入路径
 	bytes, err := os.ReadFile("")
 	if err != nil {

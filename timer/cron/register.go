@@ -1,11 +1,13 @@
 package cron
 
 import (
+	"context"
+
 	"github.com/chenbaoding2818/chainly/config"
 	"github.com/chenbaoding2818/chainly/lifecycle"
 )
 
-func (cc *CronManager) Start(cfg *config.Config) {
+func (cc *CronManager) Start(ctx context.Context, cfg *config.Config) {
 	for _, task := range cc.TimerTaskList {
 		if _, err := cc.Cron.AddFunc(task.Spec, task.Cmd); err != nil {
 			// 定时器注册失败

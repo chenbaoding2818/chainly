@@ -1,6 +1,7 @@
 package lifecycle
 
 import (
+	"context"
 	"sort"
 	"sync"
 
@@ -19,7 +20,7 @@ var (
 )
 
 type Lifecycle interface {
-	Start(*config.Config)
+	Start(context.Context, *config.Config)
 
 	Priority() int32
 
@@ -33,7 +34,7 @@ type LifecycleManager struct {
 }
 
 // Start 启动顺序，从高优先级到低优先级
-func (lm *LifecycleManager) Start() {
+func (lm *LifecycleManager) Start(ctx context.Context) {
 	if len(lm.lifecycles) == 0 {
 		// warning log here no any component registered
 		return
@@ -42,7 +43,7 @@ func (lm *LifecycleManager) Start() {
 		return lm.lifecycles[i].Priority() > lm.lifecycles[j].Priority()
 	})
 	for _, lifecycle := range lm.lifecycles {
-		lifecycle.Start(lm.cfg)
+		lifecycle.Start(ctx, lm.cfg)
 	}
 }
 

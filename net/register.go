@@ -18,7 +18,7 @@ type NetManager struct {
 	cfg *config.Net
 }
 
-func (nm *NetManager) Start(cfg *config.Config) {
+func (nm *NetManager) Start(ctx, cfg *config.Config) {
 	nm.cfg = cfg.NetCfg
 	// 检测websocket认证配置 为了安全考虑必须配置
 	if nm.cfg.Ws.WsAuthHooker == nil {
