@@ -35,12 +35,12 @@ func NewRemoterHook(ctx context.Context, wg *sync.WaitGroup, cfg config.Operatio
 	case iface.Rabbit:
 		producer = NewRabbitMQ(ctx, wg, cfg, mgCfg)
 	case iface.Kafka:
-		producer = NewKafka(ctx, cfg, mgCfg)
+		producer = NewKafka(ctx, wg, cfg, mgCfg)
 	default:
 		panic("unknown mq type")
 	}
 	return RemoterHook{
-		buffer:   make(chan []byte, 1000),
+		buffer:   make(chan []byte, cfg.BufferChanelSize),
 		producer: producer,
 	}
 }

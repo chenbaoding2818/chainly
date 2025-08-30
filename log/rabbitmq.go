@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/chenbaoding2818/chainly/config"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 var (
@@ -66,16 +68,16 @@ func (r *RabbitMQ) runBatch() {
 						msgs = append(msgs, msg)
 					} else {
 						_msg := r.combineMessages(msgs)
-						r.public(_msg)
+						r.public(r.NewMQMsg(_msg))
 						msgs = msgs[:0]
 					}
 				}
-			case <-r.ticker.C:
-				r.public(r.combineMessages(msgs))
+			case <-r.ticker.C: // 如果ticker到达时，没有累积到足够的消息，则强制发送保证一定的时效
+				r.public(r.NewMQMsg(r.combineMessages(msgs)))
 			case <-r.ctx.Done():
 				// 关闭通道时，将剩余的消息发送出去
 				close(r.bufferChanel)
-				r.public(r.combineMessages(msgs))
+				r.public(r.NewMQMsg(r.combineMessages(msgs)))
 				return
 			}
 		}
@@ -90,24 +92,16 @@ func (r *RabbitMQ) run() {
 		for {
 			select {
 			case msg := <-r.bufferChanel:
-				r.public(msg)
+				r.public(r.NewMQMsg(msg))
 			case <-r.ctx.Done():
 				close(r.bufferChanel)
 				// 关闭通道时，将剩余的消息发送出去
 				for msg := range r.bufferChanel {
-					r.public(msg)
+					r.public(r.NewMQMsg(msg))
 				}
 			}
 		}
 	}()
-}
-
-func (r *RabbitMQ) public(msgs []byte) {
-	// 空数据检测
-	if len(msgs) == 0 {
-		return
-	}
-
 }
 
 // combineMessages 合并多条消息为批量格式
@@ -117,4 +111,25 @@ func (r *RabbitMQ) combineMessages(msgs [][]byte) []byte {
 		buf.Write(msg)
 	}
 	return buf.Bytes()
+}
+
+func (r *RabbitMQ) public(body amqp.Publishing) {
+	// 判断body是否为空
+	if len(body.Body) == 0 {
+		return
+	}
+
+}
+
+func (r *RabbitMQ) NewMQMsg(body []byte) amqp.Publishing {
+	// 空数据检测
+	if len(body) == 0 {
+		return amqp.Publishing{}
+	}
+	return amqp.Publishing{
+		ContentType:  "text/plain",
+		Body:         body,
+		DeliveryMode: amqp.Persistent,
+		MessageId:    fmt.Sprintf("%d", time.Now().UnixMilli()),
+	}
 }
