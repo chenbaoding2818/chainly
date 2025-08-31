@@ -5,5 +5,14 @@ package config
 // 2、异步操作处理
 // 3、日志处理
 // 4、流量削峰
+
+type RabbitMQConfig struct {
+	Urls []string
+}
+
+type KafkaConfig struct {
+}
 type MsgQueue struct {
+	RabbitMQ *RabbitMQConfig
+	Kafka    *KafkaConfig
 }
