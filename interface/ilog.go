@@ -25,13 +25,6 @@ type ILog interface {
 	Report(msg []byte)
 }
 
-type MQType int8
-
-const (
-	Rabbit MQType = iota + 1
-	Kafka
-)
-
 type ILogProducer interface {
 	SendMsg(msg []byte) error
 }

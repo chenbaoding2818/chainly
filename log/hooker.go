@@ -30,18 +30,18 @@ type RemoterHook struct {
 
 // 创建日志对象
 func NewRemoterHook(ctx context.Context, wg *sync.WaitGroup, cfg config.OperationLog, mgCfg config.MsgQueue) zerolog.Hook {
-	var producer iface.ILogProducer
+	var logProducer iface.ILogProducer
 	switch iface.MQType(cfg.MQType) {
-	case iface.Rabbit:
-		producer = NewRabbitMQ(ctx, wg, cfg, mgCfg)
-	case iface.Kafka:
-		producer = NewKafka(ctx, wg, cfg, mgCfg)
+	case iface.MQTypeRabbitMQ:
+		logProducer = NewRabbitMQ(ctx, wg, cfg, mgCfg)
+	case iface.MQTypeKafka:
+		logProducer = NewKafka(ctx, wg, cfg, mgCfg)
 	default:
 		panic("unknown mq type")
 	}
 	return RemoterHook{
 		buffer:   make(chan []byte, cfg.BufferChanelSize),
-		producer: producer,
+		producer: logProducer,
 	}
 }
 

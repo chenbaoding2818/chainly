@@ -1,14 +1,14 @@
 package log
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/chenbaoding2818/chainly/config"
+	iface "github.com/chenbaoding2818/chainly/interface"
+	"github.com/chenbaoding2818/chainly/mq"
 	amqp "github.com/rabbitmq/amqp091-go"
 	// "github.com/streadway/amqp"
 )
@@ -38,33 +38,30 @@ type RabbitMQ struct {
 	batchSize    int32
 	ticker       *time.Ticker
 	// 通道关闭时 发送剩余的消息
-	ctx      context.Context
-	wg       *sync.WaitGroup
-	producer *RabbitMQProducer
+	ctx context.Context
+	wg  *sync.WaitGroup
+	// producer *RabbitMQProducer
+	producer iface.IProducer
 }
 
 func NewRabbitMQ(ctx context.Context, wg *sync.WaitGroup, cfg config.OperationLog, mgCfg config.MsgQueue) *RabbitMQ {
-	mq := &RabbitMQ{
+	rmq := &RabbitMQ{
 		ctx:          ctx,
 		bufferChanel: make(chan []byte, cfg.BufferChanelSize),
 		batchSize:    cfg.BatchSize,
 		wg:           wg,
 	}
 
-	mq.producer = newRabbitMQProducer(mgCfg.RabbitMQ)
-	// 连接rabbitMQ
-	go mq.connect()
-	// 重连
-	go mq.reconnect()
+	rmq.producer = mq.NewRabbitMQProducer(ctx, mgCfg.RabbitMQ)
 	// 启动消费协程
 	if cfg.BatchSize > 1 {
 		// 1分钟超时 1分钟内如果没有累计到足够的消息，则强制发送
-		mq.ticker = time.NewTicker(flushInterval)
-		mq.runBatch()
+		rmq.ticker = time.NewTicker(flushInterval)
+		rmq.runBatch()
 	} else {
-		mq.run()
+		rmq.run()
 	}
-	return mq
+	return rmq
 }
 
 func (r *RabbitMQ) SendMsg(msg []byte) error {
@@ -90,18 +87,20 @@ func (r *RabbitMQ) runBatch() {
 				if len(msgs) < int(r.batchSize) {
 					msgs = append(msgs, msg)
 				} else {
-					_msg := r.combineMessages(msgs)
-					r.public(r.NewMQMsg(_msg))
+					_msg := r.producer.CombineMessages(msgs)
+					r.producer.SendAsync(r.ctx, _msg)
 					msgs = msgs[:0]
 				}
 			case <-r.ticker.C: // 如果ticker到达时，没有累积到足够的消息，则强制发送保证一定的时效
-				r.public(r.NewMQMsg(r.combineMessages(msgs)))
+				_msg := r.producer.CombineMessages(msgs)
+				r.producer.SendAsync(r.ctx, _msg)
 			case <-r.ctx.Done():
 				// 关闭通道时，将剩余的消息发送出去
 				close(r.bufferChanel)
-				r.public(r.NewMQMsg(r.combineMessages(msgs)))
+				_msg := r.producer.CombineMessages(msgs)
+				r.producer.SendAsync(r.ctx, _msg)
 				for msg := range r.bufferChanel {
-					r.public(r.NewMQMsg(msg))
+					r.producer.SendAsync(r.ctx, msg)
 				}
 				return
 			}
@@ -117,101 +116,16 @@ func (r *RabbitMQ) run() {
 		for {
 			select {
 			case msg := <-r.bufferChanel:
-				r.public(r.NewMQMsg(msg))
+				// r.public(r.NewMQMsg(msg))
+				r.producer.SendAsync(r.ctx, msg)
 			case <-r.ctx.Done():
 				close(r.bufferChanel)
 				// 关闭通道时，将剩余的消息发送出去
 				for msg := range r.bufferChanel {
-					r.public(r.NewMQMsg(msg))
+					// r.public(r.NewMQMsg(msg))
+					r.producer.SendAsync(r.ctx, msg)
 				}
 			}
 		}
 	}()
-}
-
-// combineMessages 合并多条消息为批量格式
-func (r *RabbitMQ) combineMessages(msgs [][]byte) []byte {
-	var buf bytes.Buffer
-	for _, msg := range msgs {
-		buf.Write(msg)
-	}
-	return buf.Bytes()
-}
-
-func (r *RabbitMQ) public(body amqp.Publishing) {
-	// 判断body是否为空
-	if len(body.Body) == 0 {
-		return
-	}
-	r.producer.lock.Lock()
-	defer r.producer.lock.Unlock()
-}
-
-func (r *RabbitMQ) NewMQMsg(body []byte) amqp.Publishing {
-	// 空数据检测
-	if len(body) == 0 {
-		return amqp.Publishing{}
-	}
-	return amqp.Publishing{
-		ContentType:  "text/plain",
-		Body:         body,
-		DeliveryMode: amqp.Persistent,
-		MessageId:    fmt.Sprintf("%d", time.Now().UnixMilli()),
-	}
-}
-
-func (r *RabbitMQ) connect() {
-	r.producer.lock.Lock()
-	defer r.producer.lock.Unlock()
-	for _, url := range r.producer.urls {
-		conn, err := amqp.Dial(url)
-		if err == nil {
-			r.producer.conn = conn
-			ch, err := conn.Channel()
-			if err == nil {
-				r.producer.channel = ch
-				// 声明交换机
-				err = ch.ExchangeDeclare(
-					"logs",
-					"fanout",
-					true,
-					false,
-					false,
-					false,
-					nil,
-				)
-				if err == nil {
-
-				}
-
-			}
-
-		}
-	}
-
-	// 重连
-	r.producer.reconnect <- struct{}{}
-}
-
-func (r *RabbitMQ) reconnect() error {
-	for {
-		select {
-		case <-r.producer.reconnect:
-			const maxRetries = 5
-			for i := 0; i < maxRetries; i++ {
-				wait := time.Duration(i*i) * time.Second
-				time.Sleep(wait)
-				r.connect()
-				if r.producer.conn != nil {
-					break
-				} else if i == maxRetries-1 {
-
-				}
-			}
-
-			r.connect()
-		case <-r.ctx.Done():
-			return nil
-		}
-	}
 }
