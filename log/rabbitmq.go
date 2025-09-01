@@ -32,7 +32,6 @@ func NewRabbitMQ(ctx context.Context, wg *sync.WaitGroup, cfg config.OperationLo
 		batchSize:    cfg.BatchSize,
 		wg:           wg,
 	}
-
 	// NewRabbitMQProducer 自建了连接以及重连机制
 	rmq.producer = mq.NewRabbitMQProducer(ctx, mgCfg.RabbitMQ)
 	// 启动消费协程
