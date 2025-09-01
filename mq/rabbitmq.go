@@ -172,7 +172,6 @@ func (r *RabbitMQProducer) NewMQMsg(body []byte) amqp.Publishing {
 
 func (r *RabbitMQProducer) waitForConfirmation(seq uint64, f iface.WaitForConfirmFunc) error {
 	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
-	// defer cancel()
 	for {
 		select {
 		case confirm := <-r.confirmations:
