@@ -9,8 +9,6 @@ import (
 	"github.com/chenbaoding2818/chainly/config"
 	iface "github.com/chenbaoding2818/chainly/interface"
 	"github.com/chenbaoding2818/chainly/mq"
-	amqp "github.com/rabbitmq/amqp091-go"
-	// "github.com/streadway/amqp"
 )
 
 var (
@@ -18,30 +16,13 @@ var (
 	flushInterval         = 1 * time.Minute // 最大等待间隔
 )
 
-type RabbitMQProducer struct {
-	conn      *amqp.Connection
-	channel   *amqp.Channel
-	reconnect chan struct{}
-	urls      []string
-	lock      sync.Mutex
-}
-
-func newRabbitMQProducer(cfg *config.RabbitMQConfig) *RabbitMQProducer {
-	return &RabbitMQProducer{
-		urls:      cfg.Urls,
-		reconnect: make(chan struct{}),
-	}
-}
-
 type RabbitMQ struct {
 	bufferChanel chan []byte
 	batchSize    int32
 	ticker       *time.Ticker
-	// 通道关闭时 发送剩余的消息
-	ctx context.Context
-	wg  *sync.WaitGroup
-	// producer *RabbitMQProducer
-	producer iface.IProducer
+	ctx          context.Context
+	wg           *sync.WaitGroup
+	producer     iface.IProducer
 }
 
 func NewRabbitMQ(ctx context.Context, wg *sync.WaitGroup, cfg config.OperationLog, mgCfg config.MsgQueue) *RabbitMQ {
@@ -52,6 +33,7 @@ func NewRabbitMQ(ctx context.Context, wg *sync.WaitGroup, cfg config.OperationLo
 		wg:           wg,
 	}
 
+	// NewRabbitMQProducer 自建了连接以及重连机制
 	rmq.producer = mq.NewRabbitMQProducer(ctx, mgCfg.RabbitMQ)
 	// 启动消费协程
 	if cfg.BatchSize > 1 {
@@ -116,13 +98,11 @@ func (r *RabbitMQ) run() {
 		for {
 			select {
 			case msg := <-r.bufferChanel:
-				// r.public(r.NewMQMsg(msg))
 				r.producer.SendAsync(r.ctx, msg)
 			case <-r.ctx.Done():
 				close(r.bufferChanel)
 				// 关闭通道时，将剩余的消息发送出去
 				for msg := range r.bufferChanel {
-					// r.public(r.NewMQMsg(msg))
 					r.producer.SendAsync(r.ctx, msg)
 				}
 			}
