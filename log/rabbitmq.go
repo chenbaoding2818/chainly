@@ -69,19 +69,19 @@ func (r *RabbitMQ) runBatch() {
 					msgs = append(msgs, msg)
 				} else {
 					_msg := r.producer.CombineMessages(msgs)
-					r.producer.SendAsync(r.ctx, _msg)
+					r.producer.SendWithoutConfirm(_msg)
 					msgs = msgs[:0]
 				}
 			case <-r.ticker.C: // 如果ticker到达时，没有累积到足够的消息，则强制发送保证一定的时效
 				_msg := r.producer.CombineMessages(msgs)
-				r.producer.SendAsync(r.ctx, _msg)
+				r.producer.SendWithoutConfirm(_msg)
 			case <-r.ctx.Done():
 				// 关闭通道时，将剩余的消息发送出去
 				close(r.bufferChanel)
 				_msg := r.producer.CombineMessages(msgs)
-				r.producer.SendAsync(r.ctx, _msg)
+				r.producer.SendWithoutConfirm(_msg)
 				for msg := range r.bufferChanel {
-					r.producer.SendAsync(r.ctx, msg)
+					r.producer.SendWithoutConfirm(msg)
 				}
 				return
 			}
@@ -97,12 +97,12 @@ func (r *RabbitMQ) run() {
 		for {
 			select {
 			case msg := <-r.bufferChanel:
-				r.producer.SendAsync(r.ctx, msg)
+				r.producer.SendWithoutConfirm(msg)
 			case <-r.ctx.Done():
 				close(r.bufferChanel)
 				// 关闭通道时，将剩余的消息发送出去
 				for msg := range r.bufferChanel {
-					r.producer.SendAsync(r.ctx, msg)
+					r.producer.SendWithoutConfirm(msg)
 				}
 			}
 		}

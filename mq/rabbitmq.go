@@ -25,6 +25,8 @@ type RabbitMQProducer struct {
 	reconnect      chan struct{}          // 重连信号
 	reconnectCount int                    // 重连次数
 	reconnectMax   int                    // 最大重连次数
+	exchangeName   string                 // 交换机名称
+	exchangeType   string                 // 交换机类型
 }
 
 func NewRabbitMQProducer(ctx context.Context, rabbitMQCfg *config.RabbitMQConfig) iface.IProducer {
@@ -36,7 +38,7 @@ func NewRabbitMQProducer(ctx context.Context, rabbitMQCfg *config.RabbitMQConfig
 	}
 }
 
-func (r *RabbitMQProducer) Connect(exchangeName string, exchangeType string) error {
+func (r *RabbitMQProducer) Connect() error {
 	// 连接集群 目前负载均衡采用顺序连接 配置写死 TODO:后期可加上服务发现机制获取集群地址
 	r.lock.Lock()
 	defer r.lock.Unlock()
@@ -68,13 +70,13 @@ func (r *RabbitMQProducer) Connect(exchangeName string, exchangeType string) err
 	}
 
 	if err := r.channel.ExchangeDeclare(
-		exchangeName, // 交换机名称
-		exchangeType, // 交换机类型
-		true,         // 持久化
-		false,        // 自动删除
-		false,        // internal
-		true,         // no-wait
-		nil,          // table
+		r.exchangeName, // 交换机名称
+		r.exchangeType, // 交换机类型
+		true,           // 持久化
+		false,          // 自动删除
+		false,          // internal
+		true,           // no-wait
+		nil,            // table
 	); err != nil {
 		return fmt.Errorf("exchange declare failed: %w", err)
 	}
@@ -106,7 +108,7 @@ func (r *RabbitMQProducer) Reconnect() error {
 	}
 }
 
-func (r *RabbitMQProducer) Send(ctx context.Context, msg []byte, f iface.WaitForConfirmFunc) error {
+func (r *RabbitMQProducer) SendWithConfirm(msg []byte, f iface.WaitForConfirmFunc) error {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -132,7 +134,7 @@ func (r *RabbitMQProducer) Send(ctx context.Context, msg []byte, f iface.WaitFor
 }
 
 // SendAsync 不需要等待确认
-func (r *RabbitMQProducer) SendAsync(ctx context.Context, msg []byte) error {
+func (r *RabbitMQProducer) SendWithoutConfirm(msg []byte) error {
 	// 空数据检测
 	if len(msg) == 0 {
 		return errors.New("empty message")
