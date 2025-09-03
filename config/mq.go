@@ -16,6 +16,8 @@ type RabbitMQConfig struct {
 	RoutingKey string
 	// confirm模式是否开启
 	ConfirmEnable bool
+	// 确认超时时间
+	MsgConfirmTimeout int
 	// 消息持久化
 	Persistent bool
 	// 重连次数

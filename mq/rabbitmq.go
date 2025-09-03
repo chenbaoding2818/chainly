@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/chenbaoding2818/chainly/config"
@@ -14,23 +15,30 @@ import (
 )
 
 type PendingMessage struct {
+	DeliveryTag     int64
+	sendAt          time.Time
+	successCallback iface.WaitForConfirmFunc
+	failureCallback iface.WaitForConfirmFunc
 }
 
 type RabbitMQProducer struct {
 	cfg             *config.RabbitMQConfig
 	conn            *amqp.Connection
 	channel         *amqp.Channel
+	connCloseChan   chan *amqp.Error
+	connDoneChan    chan struct{}
 	lock            sync.Mutex
 	ctx             context.Context
-	config          amqp.Config               // rabbitmq配置
-	confirmations   chan amqp.Confirmation    // 确认通道
-	reconnect       chan struct{}             // 重连信号
-	pendingLock     sync.Mutex                // 保护pending消息的锁
-	pendingMessages map[uint64]PendingMessage // 待确认消息
+	config          amqp.Config              // rabbitmq配置
+	confirmations   chan amqp.Confirmation   // 确认通道
+	reconnect       chan struct{}            // 重连信号
+	pendingLock     sync.Mutex               // 保护pending消息的锁
+	pendingMessages map[int64]PendingMessage // 待确认消息
+	msgSequence     int64                    // 消息序列号
 }
 
 func NewRabbitMQProducer(ctx context.Context, cfg *config.RabbitMQConfig) iface.IProducer {
-	return &RabbitMQProducer{
+	rbmq := &RabbitMQProducer{
 		cfg: cfg,
 		config: amqp.Config{
 			Heartbeat: time.Duration(cfg.HeartBeat) * time.Second,
@@ -38,8 +46,12 @@ func NewRabbitMQProducer(ctx context.Context, cfg *config.RabbitMQConfig) iface.
 		},
 		ctx:             ctx,
 		reconnect:       make(chan struct{}),
-		pendingMessages: make(map[uint64]PendingMessage),
+		pendingMessages: make(map[int64]PendingMessage),
 	}
+
+	if 
+
+	return rbmq
 }
 
 func (r *RabbitMQProducer) Connect() error {
@@ -73,6 +85,8 @@ func (r *RabbitMQProducer) Connect() error {
 			return fmt.Errorf("confirm mode enable failed: %w", err)
 		}
 		r.confirmations = r.channel.NotifyPublish(make(chan amqp.Confirmation, r.cfg.MaxPendingMessage))
+		go r.waitForConfirmation()
+		go r.pendingMsgTimeoutMonitor()
 	}
 
 	if err := r.channel.ExchangeDeclare(
@@ -84,22 +98,13 @@ func (r *RabbitMQProducer) Connect() error {
 		true,                // no-wait
 		nil,                 // table
 	); err != nil {
+		r.conn.Close()
 		return fmt.Errorf("exchange declare failed: %w", err)
 	}
 
-	// 连接关闭
-	connClose := r.conn.NotifyClose(make(chan *amqp.Error))
-	select {
-	case err := <-connClose:
-		if err != nil {
-			// log.Errorf("[error] %s connection closed: %v\n", time.Now().Format("2006-01-02 15:04:05"), err)
-		}
-		// 进入重连流程
-		r.reconnect <- struct{}{}
-		return err
-	case <-r.ctx.Done():
-		return nil
-	}
+	// 监听连接关闭
+	r.connCloseChan = r.conn.NotifyClose(make(chan *amqp.Error))
+	return nil
 }
 
 func (r *RabbitMQProducer) Reconnect() error {
@@ -125,25 +130,31 @@ func (r *RabbitMQProducer) SendWithConfirm(dst string, msg []byte, successCallba
 		return nil
 	}
 	r.lock.Lock()
-	defer r.lock.Unlock()
-
 	publishing := r.NewMQMsg(msg)
 	fmt.Printf("publishing: %v\n", publishing)
 	err := r.channel.Publish(
-		"",    // 交换机名称
-		"",    // 路由键
-		false, // mandatory
-		false, // immediate
+		r.cfg.ExchangeName, // 交换机名称
+		dst,                // 路由键
+		false,              // mandatory
+		false,              // immediate
 		publishing,
 	)
 	if err != nil {
 		return err
 	}
+	r.lock.Unlock()
 
-	err = r.waitForConfirmation(0, successCallback)
-	if err != nil {
-		return err
+	// 将消息放入待确认消息队列
+	r.pendingLock.Lock()
+	seq := atomic.AddInt64(&r.msgSequence, 1)
+	pendingMsg := PendingMessage{
+		DeliveryTag:     seq,
+		sendAt:          time.Now(),
+		successCallback: successCallback,
+		failureCallback: failureCallback,
 	}
+	r.pendingMessages[seq] = pendingMsg
+	r.pendingLock.Unlock()
 
 	return nil
 }
@@ -154,9 +165,10 @@ func (r *RabbitMQProducer) SendWithoutConfirm(dst string, msg []byte) error {
 	if len(msg) == 0 {
 		return errors.New("empty message")
 	}
-	// 检测是否开启confirm模式
+	// 检测是否开启confirm模式 如果是confirm模式，则使用SendWithConfirm
 	if r.cfg.ConfirmEnable {
-		return errors.New("confirm mode enable, use SendWithConfirm instead")
+		r.SendWithConfirm(dst, msg, nil, nil)
+		return nil
 	}
 	r.lock.Lock()
 	defer r.lock.Unlock()
@@ -191,26 +203,52 @@ func (r *RabbitMQProducer) NewMQMsg(body []byte) amqp.Publishing {
 	}
 }
 
-func (r *RabbitMQProducer) waitForConfirmation(seq uint64, f iface.WaitForConfirmFunc) error {
-	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+// waitForConfirmation 等待确认
+func (r *RabbitMQProducer) waitForConfirmation() {
 	for {
 		select {
 		case confirm := <-r.confirmations:
-			if confirm.DeliveryTag == seq {
-				if !confirm.Ack {
-					return fmt.Errorf("message %d nack-ed by broker", seq)
+			// if confirm.DeliveryTag == seq {
+			// 	if !confirm.Ack {
+			// 		return fmt.Errorf("message %d nack-ed by broker", seq)
+			// 	}
+			// 	return nil
+			// }
+			fmt.Println("confirm:", confirm)
+		case <-r.connDoneChan: // 退出等待
+			return
+		case <-r.ctx.Done(): // 退出等待
+			return
+		}
+	}
+}
+
+// pendingMsgTimeoutMonitor 监控待确认消息超时
+func (r *RabbitMQProducer) pendingMsgTimeoutMonitor() {
+	for {
+		select {
+		case <-time.After(time.Second * 1):
+			r.pendingLock.Lock()
+			for seq, msg := range r.pendingMessages {
+				// 如果超过超时时间，则认为消息超时，调用失败回调
+				if time.Since(msg.sendAt) > time.Duration(r.cfg.MsgConfirmTimeout) {
+					fmt.Println("pending message timeout:", seq)
+					if msg.failureCallback != nil {
+						msg.failureCallback()
+					}
+					delete(r.pendingMessages, seq)
 				}
-				return nil
 			}
-		case <-ctx.Done():
-			if f != nil {
-				// 执行回调函数
-				return f()
-			}
-			return fmt.Errorf("confirmation timeout for message %d", seq)
+			r.pendingLock.Unlock()
+		case <-r.connDoneChan: // 退出监控
+			return
+		case <-r.ctx.Done(): // 退出监控
+			return
+			// case
 		}
 	}
 }
 
 func (r *RabbitMQProducer) Close() {
+	close(r.connDoneChan)
 }
