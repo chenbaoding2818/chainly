@@ -1,5 +1,12 @@
 package config
 
+type LogMQ struct {
+	// 消息队列的类型 支持的mq目前有1:rabbitmq 2:kafka
+	MQType   int8
+	RabbitMQ *RabbitMQConfig
+	Kafka    *KafkaConfig
+}
+
 type BaseLog struct {
 	// 是否开启远程
 	RemoteEnabled bool
@@ -7,8 +14,7 @@ type BaseLog struct {
 	BufferChanelSize int32
 	// 批量发送的大小 （开启会减少大量的网络io，但是会有丢失部分日志的风险，一般情况下是允许丢失一部分日志的）
 	BatchSize int32
-	// 消息队列的类型 支持的mq目前有1:rabbitmq 2:kafka
-	MQType int8
+	LogMQ
 }
 
 // ServerLog 服务器日志配置

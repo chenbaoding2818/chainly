@@ -13,41 +13,44 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-type RabbitMQProducer struct {
-	cfg            *config.RabbitMQConfig
-	conn           *amqp.Connection
-	channel        *amqp.Channel
-	lock           sync.Mutex
-	ctx            context.Context
-	config         amqp.Config            // rabbitmq配置
-	confirmEnabled bool                   // 是否开启confirm模式
-	confirmations  chan amqp.Confirmation // 确认通道
-	reconnect      chan struct{}          // 重连信号
-	reconnectCount int                    // 重连次数
-	reconnectMax   int                    // 最大重连次数
-	exchangeName   string                 // 交换机名称
-	exchangeType   string                 // 交换机类型
+type PendingMessage struct {
 }
 
-func NewRabbitMQProducer(ctx context.Context, rabbitMQCfg *config.RabbitMQConfig) iface.IProducer {
+type RabbitMQProducer struct {
+	cfg             *config.RabbitMQConfig
+	conn            *amqp.Connection
+	channel         *amqp.Channel
+	lock            sync.Mutex
+	ctx             context.Context
+	config          amqp.Config               // rabbitmq配置
+	confirmations   chan amqp.Confirmation    // 确认通道
+	reconnect       chan struct{}             // 重连信号
+	pendingLock     sync.Mutex                // 保护pending消息的锁
+	pendingMessages map[uint64]PendingMessage // 待确认消息
+}
+
+func NewRabbitMQProducer(ctx context.Context, cfg *config.RabbitMQConfig) iface.IProducer {
 	return &RabbitMQProducer{
-		cfg:          rabbitMQCfg,
-		ctx:          ctx,
-		reconnect:    make(chan struct{}),
-		reconnectMax: 10,
+		cfg: cfg,
+		config: amqp.Config{
+			Heartbeat: time.Duration(cfg.HeartBeat) * time.Second,
+			Dial:      amqp.DefaultDial(5 * time.Second),
+		},
+		ctx:             ctx,
+		reconnect:       make(chan struct{}),
+		pendingMessages: make(map[uint64]PendingMessage),
 	}
 }
 
 func (r *RabbitMQProducer) Connect() error {
 	// 连接集群 目前负载均衡采用顺序连接 配置写死 TODO:后期可加上服务发现机制获取集群地址
-	r.lock.Lock()
-	defer r.lock.Unlock()
 	// 可用连接
 	var (
 		err       error
 		vaildConn bool = false
 	)
-
+	r.lock.Lock()
+	defer r.lock.Unlock()
 	for _, url := range r.cfg.Urls {
 		r.conn, err = amqp.Dial(url)
 		if err == nil {
@@ -65,18 +68,21 @@ func (r *RabbitMQProducer) Connect() error {
 		return fmt.Errorf("channel open failed: %s", err.Error())
 	}
 	// 开启confirm模式
-	if r.confirmEnabled {
-		r.confirmations = make(chan amqp.Confirmation, 100)
+	if r.cfg.ConfirmEnable {
+		if err := r.channel.Confirm(false); err != nil {
+			return fmt.Errorf("confirm mode enable failed: %w", err)
+		}
+		r.confirmations = r.channel.NotifyPublish(make(chan amqp.Confirmation, r.cfg.MaxPendingMessage))
 	}
 
 	if err := r.channel.ExchangeDeclare(
-		r.exchangeName, // 交换机名称
-		r.exchangeType, // 交换机类型
-		true,           // 持久化
-		false,          // 自动删除
-		false,          // internal
-		true,           // no-wait
-		nil,            // table
+		r.cfg.ExchangeName,  // 交换机名称
+		r.cfg.ExchangeType,  // 交换机类型
+		r.cfg.ConfirmEnable, // 持久化
+		false,               // 自动删除
+		false,               // internal
+		true,                // no-wait
+		nil,                 // table
 	); err != nil {
 		return fmt.Errorf("exchange declare failed: %w", err)
 	}
@@ -108,7 +114,16 @@ func (r *RabbitMQProducer) Reconnect() error {
 	}
 }
 
-func (r *RabbitMQProducer) SendWithConfirm(msg []byte, f iface.WaitForConfirmFunc) error {
+func (r *RabbitMQProducer) SendWithConfirm(dst string, msg []byte, successCallback, failureCallback iface.WaitForConfirmFunc) error {
+	// 空数据检测
+	if len(msg) == 0 {
+		return errors.New("empty message")
+	}
+	// 检测是否开启confirm模式
+	if !r.cfg.ConfirmEnable {
+		r.SendWithoutConfirm(dst, msg)
+		return nil
+	}
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
@@ -125,7 +140,7 @@ func (r *RabbitMQProducer) SendWithConfirm(msg []byte, f iface.WaitForConfirmFun
 		return err
 	}
 
-	err = r.waitForConfirmation(0, f)
+	err = r.waitForConfirmation(0, successCallback)
 	if err != nil {
 		return err
 	}
@@ -134,10 +149,14 @@ func (r *RabbitMQProducer) SendWithConfirm(msg []byte, f iface.WaitForConfirmFun
 }
 
 // SendAsync 不需要等待确认
-func (r *RabbitMQProducer) SendWithoutConfirm(msg []byte) error {
+func (r *RabbitMQProducer) SendWithoutConfirm(dst string, msg []byte) error {
 	// 空数据检测
 	if len(msg) == 0 {
 		return errors.New("empty message")
+	}
+	// 检测是否开启confirm模式
+	if r.cfg.ConfirmEnable {
+		return errors.New("confirm mode enable, use SendWithConfirm instead")
 	}
 	r.lock.Lock()
 	defer r.lock.Unlock()

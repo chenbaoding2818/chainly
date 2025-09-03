@@ -8,10 +8,29 @@ package config
 
 type RabbitMQConfig struct {
 	Urls []string
+	// 交换机名称
+	ExchangeName string
+	// 交换机类型
+	ExchangeType string
+	// 路由键
+	RoutingKey string
+	// confirm模式是否开启
+	ConfirmEnable bool
+	// 消息持久化
+	Persistent bool
+	// 重连次数
+	ReconnectCount int
+	// 最大重连次数
+	ReconnectMax int
+	// mq心跳检测间隔
+	HeartBeat int
+	// 最大未确认消息数
+	MaxPendingMessage int
 }
 
 type KafkaConfig struct {
 }
+
 type MsgQueue struct {
 	RabbitMQ *RabbitMQConfig
 	Kafka    *KafkaConfig
