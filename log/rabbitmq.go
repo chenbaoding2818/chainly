@@ -33,7 +33,7 @@ func NewRabbitMQ(ctx context.Context, wg *sync.WaitGroup, cfg config.OperationLo
 		wg:           wg,
 	}
 	// NewRabbitMQProducer 自建了连接以及重连机制
-	rmq.producer = mq.NewRabbitMQProducer(ctx, mgCfg.RabbitMQ)
+	rmq.producer = mq.NewRabbitMQProducer(ctx, wg, mgCfg.RabbitMQ)
 	// 启动消费协程
 	if cfg.BatchSize > 1 {
 		// 1分钟超时 1分钟内如果没有累计到足够的消息，则强制发送
