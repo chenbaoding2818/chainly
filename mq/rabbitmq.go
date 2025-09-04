@@ -86,7 +86,9 @@ func (r *RabbitMQProducer) Connect() error {
 		}
 		r.confirmations = r.channel.NotifyPublish(make(chan amqp.Confirmation, r.cfg.MaxPendingMessage))
 		r._wg.Add(2)
+		// 开启确认协程
 		go r.waitForConfirmation()
+		// 开启超时监控协程
 		go r.pendingMsgTimeoutMonitor()
 	}
 
@@ -110,7 +112,22 @@ func (r *RabbitMQProducer) Connect() error {
 
 // Reconnect 重连
 func (r *RabbitMQProducer) Reconnect() error {
-	return nil
+	// 采取无限重连的方式，直到重连成功
+	for {
+		select {
+		case <-r.ctx.Done():
+			return nil
+		default:
+			if err := r.Connect(); err == nil {
+				return err
+			}
+
+			select {
+			case <-time.After(time.Second * time.Duration(r.cfg.HeartBeat)):
+				continue
+			}
+		}
+	}
 }
 
 // ReconnectMonitor 重连监控
@@ -119,7 +136,9 @@ func (r *RabbitMQProducer) ReconnectMonitor() error {
 	for {
 		select {
 		case <-r.connCloseChan: // 连接关闭时
-			// 进行重连
+			// 开始进行重连时先关闭当前连接
+			r.Close()
+			r.Reconnect()
 		case <-r.ctx.Done(): // 重连退出
 			r.Close()
 			return nil
@@ -156,7 +175,7 @@ func (r *RabbitMQProducer) waitForConfirmation() {
 					pendingMsg.failureCallback()
 				}
 			}
-		case <-r.connErrChan:
+		case <-r.connCloseChan:
 			return
 		}
 	}
@@ -179,7 +198,7 @@ func (r *RabbitMQProducer) pendingMsgTimeoutMonitor() {
 					r.pendingLock.Unlock()
 				}
 			}
-		case <-r.connErrChan:
+		case <-r.connCloseChan:
 			return
 
 		}
@@ -187,7 +206,7 @@ func (r *RabbitMQProducer) pendingMsgTimeoutMonitor() {
 }
 
 func (r *RabbitMQProducer) Close() {
-	close(r.connErrChan)
+	close(r.connCloseChan)
 	if r.channel != nil {
 		r.channel.Close()
 	}
@@ -199,6 +218,12 @@ func (r *RabbitMQProducer) Close() {
 }
 
 func (r *RabbitMQProducer) SendWithConfirm(dst string, msg []byte, successCallback, failureCallback iface.WaitForConfirmFunc) error {
+	defer func() {
+		if r := recover(); r != nil {
+			return
+		}
+	}()
+
 	// 空数据检测
 	if len(msg) == 0 {
 		return errors.New("empty message")
@@ -237,6 +262,11 @@ func (r *RabbitMQProducer) SendWithConfirm(dst string, msg []byte, successCallba
 
 // SendAsync 不需要等待确认
 func (r *RabbitMQProducer) SendWithoutConfirm(dst string, msg []byte) error {
+	defer func() {
+		if r := recover(); r != nil {
+			return
+		}
+	}()
 	// 空数据检测
 	if len(msg) == 0 {
 		return errors.New("empty message")
