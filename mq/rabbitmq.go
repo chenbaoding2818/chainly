@@ -64,6 +64,10 @@ func NewRabbitMQProducer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Ra
 	return rbmq
 }
 
+func NewDefalutRabbitMQProducer(ctx context.Context, wg *sync.WaitGroup, cfg *config.RabbitMQConfig) {
+	Producer = NewRabbitMQProducer(ctx, wg, cfg)
+}
+
 func (r *RabbitMQProducer) Connect() error {
 	// 连接集群 目前负载均衡采用顺序连接 配置写死 TODO:后期可加上服务发现机制获取集群地址
 	var err error

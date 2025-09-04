@@ -1,5 +1,9 @@
 package config
 
+import (
+	iface "github.com/chenbaoding2818/chainly/interface"
+)
+
 // MsgQueue 定义消息队列配置，消息队列在游戏业务中应用广泛，以下是一些主要应用场景
 // 1、系统解耦
 // 2、异步操作处理
@@ -34,6 +38,7 @@ type KafkaConfig struct {
 }
 
 type MsgQueue struct {
+	MQType   iface.MQType
 	RabbitMQ *RabbitMQConfig
 	Kafka    *KafkaConfig
 }
