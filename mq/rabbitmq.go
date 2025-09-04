@@ -14,6 +14,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
+// PendingMessage 待确认消息
 type PendingMessage struct {
 	DeliveryTag     uint64
 	msg             []byte
@@ -23,19 +24,23 @@ type PendingMessage struct {
 }
 
 type RabbitMQProducer struct {
-	cfg             *config.RabbitMQConfig
-	conn            *amqp.Connection
-	channel         *amqp.Channel
-	connCloseChan   chan *amqp.Error
-	connErrChan     chan struct{}
-	ctx             context.Context // 退出信号上下文
-	wg              *sync.WaitGroup // 框架层退出等待组
-	_wg             sync.WaitGroup
-	config          amqp.Config               // rabbitmq配置
-	confirmations   chan amqp.Confirmation    // 确认通道
-	pendingLock     sync.Mutex                // 保护pending消息的锁
-	pendingMessages map[uint64]PendingMessage // 待确认消息
-	msgSequence     uint64                    // 消息序列号
+	cfg              *config.RabbitMQConfig
+	conn             *amqp.Connection
+	channel          *amqp.Channel
+	connCloseChan    chan *amqp.Error
+	connErrChan      chan struct{}
+	_wg              sync.WaitGroup
+	ctx              context.Context           // 退出信号上下文
+	wg               *sync.WaitGroup           // 框架层退出等待组
+	config           amqp.Config               // rabbitmq配置
+	confirmations    chan amqp.Confirmation    // 确认通道
+	pendingLock      sync.Mutex                // 保护pending消息的锁
+	pendingRunState  bool                      // 待确认消息是否正在运行
+	pendingCloseChan chan struct{}             // 待确认消息关闭信号
+	pendingMessages  map[uint64]PendingMessage // 待确认消息
+	msgSequence      uint64                    // 消息序列号
+	isConnected      bool                      // 连接状态
+
 }
 
 func NewRabbitMQProducer(ctx context.Context, wg *sync.WaitGroup, cfg *config.RabbitMQConfig) iface.IProducer {
@@ -85,11 +90,14 @@ func (r *RabbitMQProducer) Connect() error {
 			return fmt.Errorf("confirm mode enable failed: %w", err)
 		}
 		r.confirmations = r.channel.NotifyPublish(make(chan amqp.Confirmation, r.cfg.MaxPendingMessage))
-		r._wg.Add(2)
-		// 开启确认协程
+		r._wg.Add(1)
+		// 开启确认协程 重连的时候注意是否有协程泄露问题
 		go r.waitForConfirmation()
 		// 开启超时监控协程
-		go r.pendingMsgTimeoutMonitor()
+		if !r.pendingRunState {
+			r.pendingRunState = true
+			go r.pendingMsgTimeoutMonitor()
+		}
 	}
 
 	if err := r.channel.ExchangeDeclare(
@@ -104,7 +112,7 @@ func (r *RabbitMQProducer) Connect() error {
 		r.Close()
 		return fmt.Errorf("exchange declare failed: %w", err)
 	}
-
+	r.isConnected = true
 	// 监听连接关闭
 	r.connCloseChan = r.conn.NotifyClose(make(chan *amqp.Error))
 	return nil
@@ -121,7 +129,6 @@ func (r *RabbitMQProducer) Reconnect() error {
 			if err := r.Connect(); err == nil {
 				return err
 			}
-
 			select {
 			case <-time.After(time.Second * time.Duration(r.cfg.HeartBeat)):
 				continue
@@ -137,8 +144,10 @@ func (r *RabbitMQProducer) ReconnectMonitor() error {
 		select {
 		case <-r.connCloseChan: // 连接关闭时
 			// 开始进行重连时先关闭当前连接
-			r.Close()
-			r.Reconnect()
+			if r.isConnected {
+				r.Close()
+				r.Reconnect()
+			}
 		case <-r.ctx.Done(): // 重连退出
 			r.Close()
 			return nil
@@ -175,7 +184,29 @@ func (r *RabbitMQProducer) waitForConfirmation() {
 					pendingMsg.failureCallback()
 				}
 			}
-		case <-r.connCloseChan:
+		case <-r.connErrChan:
+			for confirm := range r.confirmations {
+				r.pendingLock.Lock()
+				pendingMsg, ok := r.pendingMessages[confirm.DeliveryTag]
+				if ok {
+					delete(r.pendingMessages, confirm.DeliveryTag)
+				}
+				r.pendingLock.Unlock()
+				if !ok {
+					continue
+				}
+				// mq处理成功回调
+				if confirm.Ack && pendingMsg.successCallback != nil {
+					// 处理消息的成功回调
+					if pendingMsg.successCallback != nil {
+						pendingMsg.successCallback()
+					}
+				} else { // mq处理失败回调
+					if pendingMsg.failureCallback != nil {
+						pendingMsg.failureCallback()
+					}
+				}
+			}
 			return
 		}
 	}
@@ -183,7 +214,6 @@ func (r *RabbitMQProducer) waitForConfirmation() {
 
 // pendingMsgTimeoutMonitor 监控待确认消息超时
 func (r *RabbitMQProducer) pendingMsgTimeoutMonitor() {
-	defer r._wg.Done()
 	for {
 		select {
 		case <-time.After(time.Second * 5):
@@ -198,15 +228,23 @@ func (r *RabbitMQProducer) pendingMsgTimeoutMonitor() {
 					r.pendingLock.Unlock()
 				}
 			}
-		case <-r.connCloseChan:
+		case <-r.pendingCloseChan:
 			return
-
+		case <-r.ctx.Done():
+			return
 		}
 	}
 }
 
 func (r *RabbitMQProducer) Close() {
-	close(r.connCloseChan)
+	if r.isConnected {
+		r.isConnected = false
+	}
+	close(r.connErrChan)
+	if r.pendingRunState {
+		close(r.pendingCloseChan)
+	}
+
 	if r.channel != nil {
 		r.channel.Close()
 	}
@@ -223,7 +261,6 @@ func (r *RabbitMQProducer) SendWithConfirm(dst string, msg []byte, successCallba
 			return
 		}
 	}()
-
 	// 空数据检测
 	if len(msg) == 0 {
 		return errors.New("empty message")
@@ -233,6 +270,11 @@ func (r *RabbitMQProducer) SendWithConfirm(dst string, msg []byte, successCallba
 		r.SendWithoutConfirm(dst, msg)
 		return nil
 	}
+	// channel为空
+	if r.channel == nil {
+		return errors.New("channel is nil")
+	}
+
 	seq := atomic.AddUint64(&r.msgSequence, 1)
 	publishing := r.NewMQMsg(msg, seq)
 	err := r.channel.Publish(
@@ -256,7 +298,6 @@ func (r *RabbitMQProducer) SendWithConfirm(dst string, msg []byte, successCallba
 	}
 	r.pendingMessages[seq] = pendingMsg
 	r.pendingLock.Unlock()
-
 	return nil
 }
 
@@ -276,6 +317,11 @@ func (r *RabbitMQProducer) SendWithoutConfirm(dst string, msg []byte) error {
 		r.SendWithConfirm(dst, msg, nil, nil)
 		return nil
 	}
+	// channel为空
+	if r.channel == nil {
+		return errors.New("channel is nil")
+	}
+
 	publishing := r.NewMQMsg(msg, uint64(time.Now().UnixMilli()))
 	err := r.channel.Publish(
 		r.cfg.ExchangeName, // 交换机名称
@@ -305,4 +351,7 @@ func (r *RabbitMQProducer) NewMQMsg(body []byte, seq uint64) amqp.Publishing {
 		DeliveryMode: amqp.Persistent,
 		MessageId:    fmt.Sprintf("%d", seq),
 	}
+}
+
+type RabbitMQConsumer struct {
 }
