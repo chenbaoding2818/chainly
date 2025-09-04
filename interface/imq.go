@@ -25,6 +25,9 @@ type IProducer interface {
 	Reconnect() error
 }
 
+// ConsumerHandlerFunc 消费者处理函数类型
+type ConsumerHandlerFunc func([]byte) error
+
 // IConsumer 消费者接口
 type IConsumer interface {
 }
