@@ -24,7 +24,7 @@ func (lm *MQManager) Start(ctx context.Context, wg *sync.WaitGroup, cfg *config.
 }
 
 func (lm *MQManager) Priority() int32 {
-	return lifecycle.HighPriority
+	return lifecycle.NormalPriority
 }
 
 func (lm *MQManager) Stop() {
